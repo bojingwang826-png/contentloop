@@ -4,6 +4,7 @@ import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAiService } from "./ai-service.mjs";
 import { extractPublicSource } from "./source-service.mjs";
+import { fetchGameResearch } from "./game-research.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const port = Number(process.env.PORT || 4173);
@@ -65,6 +66,16 @@ const server = createServer(async (request, response) => {
           code: "SOURCE_EXTRACTION_FAILED",
           message: error instanceof Error ? error.message : "网页解析失败，请手动补充公开正文片段",
         });
+      }
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/game/research") {
+      try {
+        const payload = await readJson(request);
+        const result = await fetchGameResearch(`${payload.input || ""} ${payload.supplement || ""}`);
+        sendJson(response, 200, result);
+      } catch (error) {
+        sendJson(response, 502, { code: "GAME_RESEARCH_FAILED", message: error instanceof Error ? error.message : "当前赛季数据暂时无法读取" });
       }
       return;
     }

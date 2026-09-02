@@ -63,7 +63,7 @@ import {
   screenshotCategoryOptions,
   screenshotInputContext,
 } from "./domain/screenshot-ocr.js";
-import { getAiRuntimeStatus, runAiTask } from "./services/ai-client.js";
+import { getAiRuntimeStatus, researchGameTopic, runAiTask } from "./services/ai-client.js";
 import { extractPublicSource } from "./services/source-client.js";
 import { createLowResolutionPreview, recognizeScreenshot } from "./services/screenshot-ocr-client.js";
 
@@ -467,13 +467,13 @@ function renderInputAnalysis() {
   const selected = analysis.topics.find((item) => item.id === state.inputSelectedCandidateId) || analysis.topics[0];
   const selectedPending = Boolean(selected?.pending);
   return `<section class="panel input-analysis-panel" aria-labelledby="input-analysis-title">
-    <div class="analysis-heading"><div>${icon("search")}<span><p class="eyebrow">AI 输入理解</p><h2 id="input-analysis-title">${escapeHtml(analysis.intent)}</h2><small>${escapeHtml(analysis.summary)}</small></span></div><span class="status-pill ${state.inputAnalysisProvider === "openai" ? "success" : "neutral"}">${state.inputAnalysisProvider === "openai" ? "在线检索" : "演示分析"}</span></div>
+    <div class="analysis-heading"><div>${icon("search")}<span><p class="eyebrow">AI 输入理解</p><h2 id="input-analysis-title">${escapeHtml(analysis.intent)}</h2><small>${escapeHtml(analysis.summary)}</small>${analysis.liveResearch ? `<span class="live-research-meta">${escapeHtml(analysis.liveResearch.season)} · 数据版本 ${escapeHtml(analysis.liveResearch.patch)} · 已联网核对</span>` : ""}</span></div><span class="status-pill ${analysis.liveResearch || state.inputAnalysisProvider === "openai" ? "success" : "neutral"}">${analysis.liveResearch ? "赛季实时资料" : state.inputAnalysisProvider === "openai" ? "在线检索" : "演示分析"}</span></div>
     <div class="analysis-boundary-grid">
       <div><h3>事实边界</h3><div class="analysis-fact-list">${analysis.facts.map((fact) => { const [label, tone] = factLabels[fact.status] || ["待核验", "warning"]; return `<article><span class="status-pill ${tone}">${label}</span><strong>${escapeHtml(fact.label)}</strong><p>${escapeHtml(fact.claim)}</p></article>`; }).join("")}</div></div>
       <div class="analysis-source-area"><div class="source-area-title"><h3>来源关系</h3>${analysis.sources.length ? renderSourceGate(analysis.sources) : ""}</div>${analysis.sources.length ? `<div class="source-card-list">${analysis.sources.map(renderSourceCard).join("")}</div>` : `<p class="analysis-empty">没有检测到网页链接；候选选题只基于你的文字，不冒充实时热点。</p>`}</div>
     </div>
     <div class="section-title analysis-topic-heading"><div><p class="eyebrow">根据输入生成</p><h2>3 个候选选题</h2></div><span class="sort-note">收藏价值权重最高</span></div>
-    <div class="topic-grid analysis-topic-grid">${analysis.topics.map((topic, index) => `<button class="topic-card ${topic.id === selected.id ? "is-selected" : ""}" type="button" data-action="select-input-candidate" data-id="${escapeHtml(topic.id)}" aria-pressed="${topic.id === selected.id}"><span class="topic-number">0${index + 1}</span><span class="topic-badge">${escapeHtml(topic.badge)}</span><strong>${escapeHtml(topic.title)}</strong><span class="topic-angle">${escapeHtml(topic.angle)}</span><span class="topic-score"><b>${topic.recommendation}</b><small>综合推荐</small></span></button>`).join("")}</div>
+    <div class="topic-grid analysis-topic-grid">${analysis.topics.map((topic, index) => `<button class="topic-card ${topic.id === selected.id ? "is-selected" : ""}" type="button" data-action="select-input-candidate" data-id="${escapeHtml(topic.id)}" aria-pressed="${topic.id === selected.id}"><span class="topic-number">0${index + 1}</span><span class="topic-badge">${escapeHtml(topic.badge)}</span><strong>${escapeHtml(topic.title)}</strong>${topic.entities?.length ? `<span class="topic-entities" aria-label="题目涉及的英雄">${topic.entities.slice(0, 6).map((entity) => `<span class="topic-entity"><img src="${escapeHtml(entity.imageUrl)}" alt="${escapeHtml(entity.alt || `${entity.name}英雄头像`)}" width="42" height="42" loading="lazy" referrerpolicy="no-referrer" /><small>${escapeHtml(entity.name)}</small></span>`).join("")}</span>` : ""}<span class="topic-angle">${escapeHtml(topic.angle)}</span><span class="topic-score"><b>${topic.recommendation}</b><small>综合推荐</small></span></button>`).join("")}</div>
     <div class="analysis-selected-topic"><div><p class="eyebrow">当前选中的候选方向</p><h3>${escapeHtml(selected.title)}</h3><p>${escapeHtml(selected.reason)}</p><small>${selectedPending ? "先等待网页识别完成并确认正文，确认后这里会自动换成依据原文生成的新选题。" : "点击后才会建立正式创作项目；研究卡会继续沿用上面的事实与来源边界。"}</small><button class="button primary" type="button" data-action="start-dynamic-research" ${state.aiBusy || selectedPending ? "disabled" : ""}>${icon("search")}${selectedPending ? "先确认网页识别结果" : state.aiBusy && state.aiTaskMessage.includes("研究") ? escapeHtml(state.aiTaskMessage) : "用这个方向生成研究卡"}</button></div><div class="score-list">${scoreRow("搜索需求", selected.freshness)}${scoreRow("收藏价值", selected.saveValue)}${scoreRow("长期有效", selected.evergreen)}${scoreRow("新手痛点", selected.pain)}</div></div>
     ${analysis.questions.length ? `<div class="analysis-questions"><strong>还缺什么</strong><ul>${analysis.questions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
     <div class="analysis-supplement"><label for="input-supplement">补充说明后再分析</label><textarea id="input-supplement" rows="3" data-field="inputSupplement" placeholder="例如：重点给完全不懂装备的新手；不要写版本强度">${escapeHtml(state.inputSupplement)}</textarea><button class="button secondary" type="button" data-action="analyze-source-input" ${state.aiBusy || !state.sourceInput.trim() ? "disabled" : ""}>${icon("refresh")}带补充重新分析</button></div>
@@ -1661,17 +1661,32 @@ async function analyzeSourceInputWithAi() {
   state.inputAnalysisError = "";
   render();
   try {
-    const response = await runAiTask(request);
-    state.inputAnalysis = { ...response.result, sources: normalizeSourceCards(response.result.sources) };
-    state.inputSelectedCandidateId = response.result.topics[0]?.id || "";
-    state.inputAnalysisProvider = response.provider;
+    const [response, gameResearch] = await Promise.all([
+      runAiTask(request),
+      researchGameTopic(rawInput, state.inputSupplement).catch(() => null),
+    ]);
+    const topics = gameResearch?.topics?.length === 3 ? gameResearch.topics : response.result.topics;
+    const facts = [...(gameResearch?.facts || []), ...response.result.facts]
+      .filter((item, index, list) => list.findIndex((entry) => entry.id === item.id) === index);
+    const mergedSources = [...response.result.sources, ...(gameResearch?.sources || [])]
+      .filter((item, index, list) => list.findIndex((entry) => entry.id === item.id) === index);
+    state.inputAnalysis = {
+      ...response.result,
+      topics,
+      facts,
+      sources: normalizeSourceCards(mergedSources),
+      summary: gameResearch ? `${response.result.summary} 已结合${gameResearch.season}真实英雄、羁绊和官方素材生成候选。` : response.result.summary,
+      liveResearch: gameResearch ? { season: gameResearch.season, patch: gameResearch.patch, updatedAt: gameResearch.updatedAt, warning: gameResearch.warning } : null,
+    };
+    state.inputSelectedCandidateId = topics[0]?.id || "";
+    state.inputAnalysisProvider = gameResearch ? "live-game-data" : response.provider;
     state.inputAnalysisError = "";
     state.aiBusy = false;
     state.aiTaskMessage = "";
     render();
-    const sources = [...state.inputAnalysis.sources];
+    const pendingSources = state.inputAnalysis.sources.filter((source) => source.extractionStatus === "pending");
     let parsedCount = 0;
-    for (const source of sources) {
+    for (const source of pendingSources) {
       state.sourceBusyId = source.id;
       state.sourceTaskMessage = "正在读取你提供的网站…";
       render();
@@ -1699,6 +1714,38 @@ async function analyzeSourceInputWithAi() {
     state.inputAnalysisError = error instanceof Error ? error.message : "输入分析失败，请补充关键信息后重试";
     render();
   }
+}
+
+async function refreshConfirmedSourceWithLiveData(sourceId, manual = false) {
+  const source = state.inputAnalysis?.sources?.find((item) => item.id === sourceId);
+  if (!source || source.excerpt.trim().length < 20) return;
+  state.inputAnalysis.sources = manual
+    ? saveManualSource(state.inputAnalysis.sources, sourceId)
+    : confirmExtractedSource(state.inputAnalysis.sources, sourceId);
+  state.inputAnalysis = refreshAnalysisWithParsedSources(state.inputAnalysis, state.sourceInput, state.inputSupplement);
+  state.inputSelectedCandidateId = state.inputAnalysis.topics[0]?.id || "";
+  state.aiBusy = true;
+  state.aiTaskMessage = "正在按网页主题核对当前赛季资料…";
+  render();
+  try {
+    const live = await researchGameTopic(`${source.title} ${source.excerpt}`, state.inputSupplement);
+    state.inputAnalysis.topics = live.topics;
+    state.inputAnalysis.facts = [...live.facts, ...state.inputAnalysis.facts]
+      .filter((item, index, list) => list.findIndex((entry) => entry.id === item.id) === index);
+    state.inputAnalysis.sources = normalizeSourceCards([...state.inputAnalysis.sources, ...live.sources]
+      .filter((item, index, list) => list.findIndex((entry) => entry.id === item.id) === index));
+    state.inputAnalysis.liveResearch = { season: live.season, patch: live.patch, updatedAt: live.updatedAt, warning: live.warning };
+    state.inputAnalysis.summary = `${state.inputAnalysis.summary} 已把原文主题与${live.season}真实赛季资料结合。`;
+    state.inputSelectedCandidateId = live.topics[0]?.id || "";
+    state.inputAnalysisProvider = "live-game-data";
+  } catch {
+    // Keep the source-derived candidates when live season data is temporarily unavailable.
+  }
+  state.aiBusy = false;
+  state.aiTaskMessage = "";
+  saveState();
+  render();
+  showToast(manual ? "手动内容已用于选题，并补充了当前赛季英雄与素材" : "网页已用于选题，并补充了当前赛季英雄与素材");
 }
 
 async function extractSourceFromWeb(sourceId) {
@@ -1917,12 +1964,7 @@ app.addEventListener("click", (event) => {
       showToast("识别结果不完整，请重新解析或手动补充正文");
       return;
     }
-    state.inputAnalysis.sources = confirmExtractedSource(state.inputAnalysis.sources, id);
-    state.inputAnalysis = refreshAnalysisWithParsedSources(state.inputAnalysis, state.sourceInput, state.inputSupplement);
-    state.inputSelectedCandidateId = state.inputAnalysis.topics[0]?.id || "";
-    saveState();
-    render();
-    showToast("识别结果已确认，候选选题已根据这个网站重新生成");
+    void refreshConfirmedSourceWithLiveData(id, false);
   }
   if (action === "save-manual-source") {
     const source = state.inputAnalysis?.sources?.find((item) => item.id === id);
@@ -1931,12 +1973,7 @@ app.addEventListener("click", (event) => {
       document.querySelector(`[data-field="sourceExcerpt"][data-id="${CSS.escape(id || "")}"]`)?.focus();
       return;
     }
-    state.inputAnalysis.sources = saveManualSource(state.inputAnalysis.sources, id);
-    state.inputAnalysis = refreshAnalysisWithParsedSources(state.inputAnalysis, state.sourceInput, state.inputSupplement);
-    state.inputSelectedCandidateId = state.inputAnalysis.topics[0]?.id || "";
-    saveState();
-    render();
-    showToast("手动补充已保存，并已直接用于候选选题和研究卡");
+    void refreshConfirmedSourceWithLiveData(id, true);
   }
   if (action === "start-dynamic-research") void buildDynamicResearchWithAi();
 

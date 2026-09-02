@@ -1322,7 +1322,52 @@ textarea:disabled {
 }
 
 .analysis-topic-grid .topic-card {
-  min-height: 230px;
+  min-height: 310px;
+}
+
+.live-research-meta {
+  display: block;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border: 1px solid rgb(76 214 153 / 32%);
+  border-radius: 999px;
+  color: var(--success);
+  font-size: 12px;
+}
+
+.topic-entities {
+  display: flex;
+  min-height: 64px;
+  margin-top: 10px;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.topic-entity {
+  display: grid;
+  flex: 0 0 44px;
+  justify-items: center;
+  gap: 3px;
+}
+
+.topic-entity img {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(242 200 98 / 64%);
+  border-radius: 10px;
+  background: var(--canvas-soft);
+  object-fit: cover;
+}
+
+.topic-entity small {
+  width: 48px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .analysis-selected-topic {

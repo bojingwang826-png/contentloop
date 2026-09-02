@@ -191,6 +191,20 @@ function visualRecord(name, page, topic) {
 
 function planPageVisuals(pages, topic, kind) {
   const planned = new Map();
+  const liveMedia = Array.isArray(topic?.media)
+    ? topic.media.filter((item) => /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//i.test(String(item?.source || "")))
+    : [];
+  if (liveMedia.length) {
+    const targetPages = pages.filter((page) => page.pageNo === 1 || page.pageNo >= 3);
+    targetPages.forEach((page, index) => {
+      const media = liveMedia[index % liveMedia.length];
+      planned.set(page.pageNo, {
+        ...media,
+        reason: media.reason || `“${String(page.title || topic.title).slice(0, 18)}”使用该题涉及的当前赛季真实素材`,
+      });
+    });
+    return planned;
+  }
   if (kind === "equipment") {
     planned.set(3, visualRecord("roadmap", pages[2], topic));
     planned.set(7, visualRecord("mnemonic", pages[6], topic));

@@ -1,4 +1,5 @@
 import { createAiService } from "../scripts/ai-service.mjs";
+import { fetchGameResearch } from "../scripts/game-research.mjs";
 
 const MAX_JSON_BYTES = 200_000;
 const MAX_READER_BYTES = 2_000_000;
@@ -259,6 +260,19 @@ export default {
           code: "SOURCE_EXTRACTION_FAILED",
           message: error instanceof Error ? error.message : "网页解析失败，请手动补充公开正文片段",
         }, error?.statusCode || 422);
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/api/game/research") {
+      try {
+        const payload = await readJson(request);
+        const query = compact(`${payload.input || ""} ${payload.supplement || ""}`, 1600);
+        if (query.length < 2) return json({ code: "GAME_QUERY_REQUIRED", message: "请先输入一个金铲铲主题" }, 400);
+        return json(await fetchGameResearch(query, fetch));
+      } catch (error) {
+        return json({
+          code: "GAME_RESEARCH_FAILED",
+          message: error instanceof Error ? error.message : "当前赛季数据暂时无法读取",
+        }, 502);
       }
     }
     return new Response(null, { status: 404 });

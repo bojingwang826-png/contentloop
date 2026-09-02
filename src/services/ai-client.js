@@ -34,3 +34,14 @@ export async function runAiTask(request, context = {}, fetchImpl = globalThis.fe
     throw error;
   }
 }
+
+export async function researchGameTopic(input, supplement = "", fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl("/api/game/research", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ input, supplement }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) throw new Error(payload.message || "当前赛季资料暂时无法读取");
+  return payload;
+}

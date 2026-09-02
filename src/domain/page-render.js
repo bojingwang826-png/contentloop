@@ -81,10 +81,12 @@ export function getRulePageDensity(model) {
 
 function normalizeVisual(visual) {
   const name = String(visual?.name || "");
-  const source = getIllustrationSource(name);
+  const externalSource = String(visual?.source || "");
+  const trustedExternal = /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//i.test(externalSource);
+  const source = trustedExternal ? externalSource : getIllustrationSource(name);
   if (!source) return null;
   return {
-    kind: "illustration",
+    kind: trustedExternal ? "official" : "illustration",
     name,
     source,
     alt: String(visual?.alt || "与本页内容对应的概念配图"),

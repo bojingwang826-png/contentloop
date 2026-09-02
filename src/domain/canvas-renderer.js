@@ -177,6 +177,7 @@ async function loadImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.decoding = "async";
+    if (/^https:\/\//i.test(String(src || ""))) image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`页面图片加载失败：${src}`));
     image.src = new URL(src, document.baseURI).href;
@@ -204,7 +205,7 @@ async function loadOfficialIcons(model, audit) {
 async function loadPageAssets(model, audit) {
   const images = await loadOfficialIcons(model, audit);
   if (model.visual) {
-    const source = getIllustrationSource(model.visual.name);
+    const source = model.visual.source || getIllustrationSource(model.visual.name);
     if (!source) throw new Error(`缺少页面配图：${model.visual.name}`);
     images.set(`illustration:${model.visual.name}`, await loadImage(source));
   }
