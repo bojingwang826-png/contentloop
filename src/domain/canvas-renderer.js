@@ -259,6 +259,41 @@ function drawIllustration(ctx, image, x, y, width, height, radius = 28, fit = "c
   ctx.restore();
 }
 
+function drawLineupBanner(ctx, entities, images, x, y, width, height, audit) {
+  const lineup = entities.filter((entity) => images.get(`remote:${entity.imageUrl}`)).slice(0, 3);
+  if (lineup.length < 2) return false;
+  fillRounded(ctx, x, y, width, height, 28, colors.surface, "rgba(242,200,98,.30)");
+  ctx.save();
+  roundedPath(ctx, x + 3, y + 3, width - 6, height - 6, 25);
+  ctx.clip();
+  const tileWidth = width / lineup.length;
+  lineup.forEach((entity, index) => {
+    const image = images.get(`remote:${entity.imageUrl}`);
+    const scale = Math.max(tileWidth / image.naturalWidth, height / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    const tileX = x + (index * tileWidth);
+    ctx.drawImage(image, tileX + ((tileWidth - drawWidth) / 2), y + ((height - drawHeight) / 2), drawWidth, drawHeight);
+    if (index) {
+      ctx.fillStyle = "rgba(242,200,98,.28)";
+      ctx.fillRect(tileX - 1, y, 2, height);
+    }
+    const shade = ctx.createLinearGradient(0, y + (height * 0.48), 0, y + height);
+    shade.addColorStop(0, "rgba(13,10,24,0)");
+    shade.addColorStop(1, "rgba(13,10,24,.88)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(tileX, y, tileWidth, height);
+    ctx.fillStyle = colors.text;
+    ctx.textAlign = "center";
+    drawFittedText(ctx, entity.name, tileX + (tileWidth / 2), y + height - 24, tileWidth - 20, 28, {
+      preferredSize: 18, minSize: 14, weight: 800, lineFactor: 1.1, maxLines: 1,
+    }, audit, `阵容组合图 ${index + 1}`);
+  });
+  ctx.restore();
+  ctx.textAlign = "left";
+  return true;
+}
+
 function drawHeroPortrait(ctx, images, entity, x, y, size, audit, label = "英雄") {
   const image = images.get(`remote:${entity.imageUrl}`);
   if (!image) {
@@ -703,17 +738,19 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
 
 function drawRosterCard(ctx, item, images, x, y, width, height, audit, index) {
   fillRounded(ctx, x, y, width, height, 25, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
-  drawHeroPortrait(ctx, images, item, x + 22, y + 22, 92, audit);
+  const portraitSize = 84;
+  drawHeroPortrait(ctx, images, item, x + 22, y + 22, portraitSize, audit);
   ctx.fillStyle = colors.text;
-  drawFittedText(ctx, item.name, x + 134, y + 52, width - 158, 46, {
+  drawFittedText(ctx, item.name, x + 126, y + 50, width - 150, 48, {
     preferredSize: 28, minSize: 21, weight: 800, lineFactor: 1.15, maxLines: 1,
   }, audit, `成员 ${index + 1} 名称`);
   ctx.fillStyle = colors.accent;
   setFont(ctx, 20, 700);
-  ctx.fillText(`${item.cost || "?"}费 · ${item.positionLabel}`, x + 134, y + 89);
+  ctx.fillText(`${item.cost || "?"}费 · ${item.positionLabel}`, x + 126, y + 88);
   ctx.fillStyle = colors.muted;
-  drawFittedText(ctx, item.detail || item.traits.join(" / "), x + 22, y + 128, width - 44, height - 140, {
-    preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.28, maxLines: 4,
+  const detailTop = y + 132;
+  drawFittedText(ctx, item.detail || item.traits.join(" / "), x + 22, detailTop, width - 44, height - 146, {
+    preferredSize: 20, minSize: 16, weight: 500, lineFactor: 1.3, maxLines: 4,
   }, audit, `成员 ${index + 1} 羁绊`);
 }
 
@@ -722,7 +759,7 @@ function drawRoster(ctx, model, images, audit) {
   const count = Math.min(7, model.items.length);
   const rows = Math.ceil(count / 2);
   const gap = 16;
-  const cardHeight = Math.min(218, Math.floor((1318 - bodyTop - ((rows - 1) * gap)) / rows));
+  const cardHeight = Math.min(270, Math.floor((1318 - bodyTop - ((rows - 1) * gap)) / rows));
   const width = 467;
   model.items.slice(0, count).forEach((item, index) => {
     const isOddLast = count % 2 === 1 && index === count - 1;
@@ -822,16 +859,17 @@ function drawBoard(ctx, model, images, audit) {
 
 function drawSideRule(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 20;
+  const panelHeight = Math.min(920, 1298 - bodyTop);
   const hasVisual = Boolean(model.visual);
   const visualWidth = hasVisual ? 340 : 0;
   if (hasVisual) {
-    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, visualWidth, 692, 28, "smart");
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, visualWidth, panelHeight, 28, "smart");
   }
   const cardX = hasVisual ? 424 : 64;
   const cardWidth = hasVisual ? 592 : 952;
   const gap = 14;
   const count = Math.min(4, model.items.length);
-  const cardHeight = Math.floor((692 - (Math.max(0, count - 1) * gap)) / Math.max(1, count));
+  const cardHeight = Math.floor((panelHeight - (Math.max(0, count - 1) * gap)) / Math.max(1, count));
   model.items.slice(0, count).forEach((item, index) => {
     const y = bodyTop + (index * (cardHeight + gap));
     fillRounded(ctx, cardX, y, cardWidth, cardHeight, 24, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
@@ -847,18 +885,21 @@ function drawSideRule(ctx, model, images, audit) {
     }, audit, `侧栏步骤 ${index + 1} 标题`);
     ctx.fillStyle = colors.muted;
     drawFittedText(ctx, item.detail, cardX + 24, y + 92, cardWidth - 48, cardHeight - 108, {
-      preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.3, maxLines: 4,
+      preferredSize: 20, minSize: 17, weight: 500, lineFactor: 1.32, maxLines: 5,
     }, audit, `侧栏步骤 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
-  audit.contentBottom = bodyTop + 692;
+  audit.contentBottom = bodyTop + panelHeight;
 }
 
 function drawChecklist(ctx, model, images, audit) {
   let bodyTop = drawTitle(ctx, model, true, audit) + 18;
-  if (model.visual) {
-    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, 200, 28, "smart");
-    bodyTop += 218;
+  if (model.heroEntities.length >= 2) {
+    drawLineupBanner(ctx, model.heroEntities, images, 64, bodyTop, 952, 236, audit);
+    bodyTop += 254;
+  } else if (model.visual) {
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, 220, 28, "smart");
+    bodyTop += 238;
   }
   const count = Math.min(4, model.items.length);
   const gap = 14;

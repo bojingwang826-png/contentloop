@@ -61,4 +61,8 @@ test("实时题目的官方素材会进入第四步页面并被预览模型保�
   assert.equal(boardModel.layoutStyle, "board");
   assert.deepEqual(boardModel.items.map((item) => item.position), ["back", "front", "back"]);
   assert.ok(boardModel.items.every((item) => Number.isInteger(item.boardSlot.row) && Number.isInteger(item.boardSlot.col)));
+  const closingModel = buildPageRenderModel(project.pages[6], "铲友研究所", 7);
+  assert.equal(closingModel.layoutStyle, "checklist");
+  assert.equal(closingModel.heroEntities.length, 3);
+  assert.deepEqual(closingModel.heroEntities.map((item) => item.imageUrl), model.heroEntities.map((item) => item.imageUrl));
 });

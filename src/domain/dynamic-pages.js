@@ -367,7 +367,7 @@ function materializeEntity(entity, index, layoutStyle) {
     name: entity.name,
     detail: layoutStyle === "board"
       ? `${positionText} · ${traits || "根据阵容职责调整"}`
-      : `${entity.cost || "?"}费，拥有${traits || "当前赛季"}羁绊。基础职责是${positionText}，组阵时要同时看费用曲线、技能射程和相邻队友，不能只按英雄名照抄。`,
+      : `${entity.cost || "?"}费，拥有${traits || "当前赛季"}羁绊。基础职责是${positionText}；组阵时还要核对费用曲线、技能射程和相邻队友，不能只按英雄名照抄。`,
     example: layoutStyle === "board" ? `${positionText}，实战按对手换边` : `${positionText} · 先确认来牌与费用再决定是否追星`,
     imageUrl: entity.imageUrl || "",
     cost: entity.cost || 0,
@@ -396,6 +396,9 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     preservedFields: [],
     manualOrder: [],
     visual: visualPlan.get(page.pageNo) || null,
+    // Keep the current-season roster available to every page renderer. Some
+    // layouts use several real heroes to build a lineup banner.
+    featuredEntities: entities,
     contentKind: kind,
     layoutStyle: page.layoutStyle || "cards",
     layoutVersion: 3,
