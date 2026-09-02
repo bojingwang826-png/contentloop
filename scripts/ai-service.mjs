@@ -86,7 +86,7 @@ function resultSchema(request) {
           },
         },
         topics: {
-          type: "array", minItems: 3, maxItems: 3,
+          type: "array", minItems: 5, maxItems: 5,
           items: {
             type: "object", additionalProperties: false,
             required: ["id", "title", "angle", "badge", "recommendation", "freshness", "saveValue", "evergreen", "pain", "reason", "evidenceIds"],
@@ -241,7 +241,7 @@ function resultSchema(request) {
 function modelInput(request) {
   const common = "你是金铲铲小红书图文编辑。只改写用户允许的文字，不新增精确数字、胜率、登场率、上分承诺、个人实测或未经输入支持的事实。不要照抄修改指令。";
   if (request.taskType === "understand_input") {
-    return `你是金铲铲小红书全主题选题研究助手。用户可以提出任何与金铲铲相关的主题，包括新赛季阵容、英雄棋子、羁绊转职、装备、强化符文、运营经济、搜牌升级、站位对位、版本更新、玩法机制、新手教程、避坑、资讯解读、赛事讨论或冷门自定义问题。必须紧扣用户原话；如果提供了已读取的网页正文，要借鉴原文的核心对象、结构和信息点生成 3 个明显不同的候选方向，不能退回固定模板。收藏价值权重最高。区分用户主张、来源支持、待核验和禁止使用；不要声称已经读取未实际检索到的网页；不要生成未经来源支持的版本强度、胜率、登场率、爆料或个人实测。资料不足时给通用判断框架，并把真正影响创作的问题放进 questions。\n任务输入：${JSON.stringify(request.input)}`;
+    return `你是金铲铲小红书全主题选题研究助手。用户可以提出任何与金铲铲相关的主题，包括新赛季阵容、英雄棋子、羁绊转职、装备、强化符文、运营经济、搜牌升级、站位对位、版本更新、玩法机制、新手教程、避坑、资讯解读、赛事讨论或冷门自定义问题。必须紧扣用户原话；如果提供了已读取的网页正文，要借鉴原文的核心对象、结构和信息点生成正好 5 个明显不同的候选方向，分别承担核心解释、条件对比、避坑、实战落地和克制应变，不能退回固定模板。收藏价值权重最高。区分用户主张、来源支持、待核验和禁止使用；不要声称已经读取未实际检索到的网页；不要生成未经来源支持的版本强度、胜率、登场率、爆料或个人实测。资料不足时给通用判断框架，并把真正影响创作的问题放进 questions。\n任务输入：${JSON.stringify(request.input)}`;
   }
   if (request.taskType === "extract_source") {
     return `你是公开网页来源整理助手。请尝试打开指定 URL，只提取公开可见的标题、作者、发布日期和一段忠实摘要。找不到作者或日期时返回空字符串；无法读取正文、页面要求登录或无法确认内容时，status 必须为 failed，并说明 failureReason。不得根据网址、搜索摘要或常识猜正文。\n任务输入：${JSON.stringify(request.input)}`;

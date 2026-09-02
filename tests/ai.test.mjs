@@ -30,10 +30,10 @@ test("输入理解请求会隐藏链接中的敏感参数", () => {
   assert.equal(request.input.supplement, "面向新手");
 });
 
-test("演示输入理解返回三个候选并把链接标为待核验", () => {
+test("演示输入理解返回五个候选并把链接标为待核验", () => {
   const request = createUnderstandInputRequest("想做装备合成教程 https://example.com/tft", "", "understand-mock");
   const response = runMockAiTask(request);
-  assert.equal(response.result.topics.length, 3);
+  assert.equal(response.result.topics.length, 5);
   assert.equal(response.result.sources[0].status, "user_provided");
   assert.equal(response.result.facts.some((fact) => fact.status === "needs_verification"), true);
   assert.equal(response.result.topics.every((topic) => topic.evidenceIds.includes("fact-user-intent")), true);
@@ -97,7 +97,7 @@ test("在线输入理解启用网页检索并保持结构化输出", async () =>
   const response = await service.run(request, { clientId: "understand-user" });
   assert.equal(sentBody.tools[0].type, "web_search_preview");
   assert.equal(sentBody.text.format.type, "json_schema");
-  assert.equal(response.result.topics.length, 3);
+  assert.equal(response.result.topics.length, 5);
 });
 
 test("纯灵感输入不会无故启用付费网页检索", async () => {

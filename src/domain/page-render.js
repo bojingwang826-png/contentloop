@@ -109,6 +109,9 @@ function normalizeEntity(item, index) {
     traits: Array.isArray(item?.traits) ? item.traits.map(String).filter(Boolean) : [],
     position: ["front", "back", "flex"].includes(item?.position) ? item.position : "flex",
     positionLabel: String(item?.positionLabel || "灵活位"),
+    boardSlot: Number.isInteger(item?.boardSlot?.row) && Number.isInteger(item?.boardSlot?.col)
+      ? { row: Math.max(0, Math.min(3, item.boardSlot.row)), col: Math.max(0, Math.min(6, item.boardSlot.col)) }
+      : null,
   };
 }
 

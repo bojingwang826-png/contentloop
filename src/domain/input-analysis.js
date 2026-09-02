@@ -160,11 +160,16 @@ function candidateBlueprints(kind, subject) {
       [`${subject}分别适合哪些玩家`, "根据输入内容区分休闲、冲分和收集等不同需求。", "人群型"],
     ],
   };
-  return packs[kind] || [
+  const base = packs[kind] || [
     [`${subject}怎么理解？先拆成 4 个关键问题`, "紧扣输入主题整理规则、场景、选择依据和行动建议。", "解读型"],
     [`${subject}新手从哪里开始`, "把复杂内容改写成由浅入深、可直接执行的步骤。", "教程型"],
     [`${subject}有哪些误区和不同选择`, "保留条件差异与争议边界，不输出脱离主题的固定答案。", "避坑型"],
   ];
+  return [
+    ...base,
+    [`${subject}怎么落到一局里：从开局到成型`, "按真实对局阶段组织内容，交代什么时候观察、什么时候行动，以及条件变化后怎么调整。", "实战型"],
+    [`${subject}遇到克制怎么办：保留两条替代路线`, "把对位、资源不足和关键牌缺失分别处理，让内容从结论延伸到可执行的应对。", "应变型"],
+  ].slice(0, 5);
 }
 
 function pendingUrlTopics(sources) {
@@ -173,6 +178,8 @@ function pendingUrlTopics(sources) {
     [`等待读取 ${domain} 的正文`, "网页正文尚未确认，暂不编造具体选题。", "等待解析"],
     ["先核对网页标题、日期和核心内容", "确认识别结果后，系统会用原文主题重新生成候选。", "确认后生成"],
     ["当前只保留网址，不建立内容结论", "读取失败时可以粘贴公开正文片段继续。", "事实保护"],
+    ["等正文确认后再匹配本赛季资料", "系统会核对英雄、羁绊与版本，避免用旧赛季素材。", "赛季核对"],
+    ["等正文确认后再设计专属版式", "阵容、站位、羁绊与运营会使用不同页面结构。", "版式规划"],
   ].map(([title, angle, badge], index) => ({
     id: `candidate-pending-${index + 1}`,
     title,
@@ -235,12 +242,12 @@ export function analyzeInputDemo(rawInput, supplement = "") {
       title: compact(title, 70),
       angle,
       badge,
-      recommendation: [91, 87, 84][index],
-      freshness: kind === "version" ? [92, 88, 84][index] : kind === "performance" || kind === "comments" ? [82, 78, 76][index] : [76, 72, 69][index],
-      saveValue: [95, 92, 89][index],
-      evergreen: kind === "version" ? [62, 72, 68][index] : [86, 89, 84][index],
-      pain: [94, 91, 88][index],
-      reason: `直接来自输入线索“${compact(subject, 24)}”；第 ${index + 1} 个方向分别承担${index === 0 ? "核心问题解释" : index === 1 ? "条件变化或对比" : "避坑与后续延展"}。`,
+      recommendation: [94, 91, 88, 86, 84][index],
+      freshness: kind === "version" ? [96, 92, 89, 87, 85][index] : kind === "performance" || kind === "comments" ? [88, 85, 82, 80, 78][index] : [86, 83, 80, 78, 76][index],
+      saveValue: [96, 94, 92, 90, 88][index],
+      evergreen: kind === "version" ? [66, 72, 70, 76, 74][index] : [88, 90, 86, 84, 82][index],
+      pain: [95, 93, 91, 89, 87][index],
+      reason: `直接来自输入线索“${compact(subject, 24)}”；该方向重点承担${["核心解释", "条件对比", "避坑拆解", "实战落地", "克制应变"][index]}，与其余候选的内容任务不同。`,
       evidenceIds: ["fact-user-intent"],
       pending: false,
     }));
@@ -252,7 +259,7 @@ export function analyzeInputDemo(rawInput, supplement = "") {
     inputType: urls.length && compact(combined.replace(/https?:\/\/[^\s]+/g, "")).length ? "mixed" : urls.length ? "url" : "idea",
     summary: topics.some((topic) => topic.pending)
       ? `已识别到 ${sources[0]?.domain || "网页"} 链接；先读取并确认正文，再生成基于原文的候选选题。`
-      : `已从输入中提取主题“${subject}”，三个候选会分别覆盖核心解释、条件变化和延展方向。`,
+      : `已从输入中提取主题“${subject}”，五个候选会分别覆盖核心解释、条件变化、避坑、实战和应变。`,
     intent,
     facts,
     sources,

@@ -33,7 +33,7 @@ export function createUnderstandInputRequest(rawInput, supplement = "", taskId =
       supplement: redactSensitiveUrlParams(String(supplement || "").trim()).slice(0, 2000),
       game: "金铲铲之战",
       audience: "会照阵容抄作业、但不擅长变阵的新手玩家",
-      goal: "生成 3 个可做成小红书图文的候选选题，收藏价值权重最高",
+      goal: "生成 5 个明显不同、可做成小红书图文的候选选题，收藏价值权重最高",
       factBoundary: "不得把用户提供的链接视为已读取；未经来源支持的版本强度、胜率、登场率和爆料必须标记待核验或禁止使用。",
     },
     allowedSourceIds: [],
@@ -257,7 +257,7 @@ export function validateAiTaskResponse(response, request) {
     }
     const topics = Array.isArray(result.topics) ? result.topics : [];
     const topicIds = new Set();
-    if (topics.length !== 3) issues.push("必须返回 3 个候选选题");
+    if (topics.length !== 5) issues.push("必须返回 5 个候选选题");
     for (const topic of topics) {
       if (typeof topic?.id !== "string" || !topic.id.trim() || topicIds.has(topic.id)) issues.push("选题 ID 缺失或重复");
       topicIds.add(topic?.id);

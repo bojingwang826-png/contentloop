@@ -229,7 +229,8 @@ function drawIcon(ctx, image, x, y, size, radius = 18) {
 
 function drawIllustration(ctx, image, x, y, width, height, radius = 28, fit = "cover") {
   fillRounded(ctx, x, y, width, height, radius, colors.surface, "rgba(242,200,98,.28)");
-  const scale = fit === "contain"
+  const contain = fit === "contain" || fit === "smart";
+  const scale = contain
     ? Math.min((width - 20) / image.naturalWidth, (height - 20) / image.naturalHeight)
     : Math.max(width / image.naturalWidth, height / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
@@ -237,6 +238,18 @@ function drawIllustration(ctx, image, x, y, width, height, radius = 28, fit = "c
   ctx.save();
   roundedPath(ctx, x + 3, y + 3, width - 6, height - 6, Math.max(12, radius - 3));
   ctx.clip();
+  if (contain) {
+    const backdropScale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+    const backdropWidth = image.naturalWidth * backdropScale;
+    const backdropHeight = image.naturalHeight * backdropScale;
+    ctx.save();
+    ctx.filter = "blur(18px) saturate(.82) brightness(.58)";
+    ctx.globalAlpha = 0.82;
+    ctx.drawImage(image, x + ((width - backdropWidth) / 2), y + ((height - backdropHeight) / 2), backdropWidth, backdropHeight);
+    ctx.restore();
+    ctx.fillStyle = "rgba(18,10,42,.24)";
+    ctx.fillRect(x, y, width, height);
+  }
   ctx.drawImage(image, x + ((width - drawWidth) / 2), y + ((height - drawHeight) / 2), drawWidth, drawHeight);
   const shade = ctx.createLinearGradient(x, y, x, y + height);
   shade.addColorStop(0, "rgba(20,13,43,.02)");
@@ -699,8 +712,8 @@ function drawRosterCard(ctx, item, images, x, y, width, height, audit, index) {
   setFont(ctx, 20, 700);
   ctx.fillText(`${item.cost || "?"}费 · ${item.positionLabel}`, x + 134, y + 89);
   ctx.fillStyle = colors.muted;
-  drawFittedText(ctx, item.traits.join(" / ") || item.detail, x + 22, y + 137, width - 44, height - 151, {
-    preferredSize: 20, minSize: 17, weight: 500, lineFactor: 1.25, maxLines: 2,
+  drawFittedText(ctx, item.detail || item.traits.join(" / "), x + 22, y + 128, width - 44, height - 140, {
+    preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.28, maxLines: 4,
   }, audit, `成员 ${index + 1} 羁绊`);
 }
 
@@ -721,58 +734,164 @@ function drawRoster(ctx, model, images, audit) {
   audit.contentBottom = bodyTop + (rows * cardHeight) + (Math.max(0, rows - 1) * gap);
 }
 
-function boardColumns(count) {
-  const start = Math.floor((7 - count) / 2);
-  return Array.from({ length: count }, (_, index) => start + index);
+function hexPath(ctx, cx, cy, radius) {
+  ctx.beginPath();
+  for (let side = 0; side < 6; side += 1) {
+    const angle = ((Math.PI / 3) * side) - (Math.PI / 6);
+    const px = cx + (radius * Math.cos(angle));
+    const py = cy + (radius * Math.sin(angle));
+    if (side === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function fallbackBoardSlot(item, index) {
+  const byPosition = {
+    front: [{ row: 0, col: 2 }, { row: 0, col: 4 }, { row: 1, col: 1 }, { row: 1, col: 5 }],
+    flex: [{ row: 1, col: 3 }, { row: 2, col: 2 }, { row: 2, col: 4 }],
+    back: [{ row: 3, col: 1 }, { row: 3, col: 5 }, { row: 3, col: 3 }, { row: 2, col: 6 }],
+  };
+  const list = byPosition[item.position] || byPosition.flex;
+  return list[index % list.length];
 }
 
 function drawBoard(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 18;
-  const panelHeight = 620;
+  const panelHeight = 604;
   fillRounded(ctx, 64, bodyTop, 952, panelHeight, 34, "rgba(23,15,48,.84)", "rgba(242,200,98,.30)");
-  const rows = [
-    { key: "back", label: "后排输出", y: bodyTop + 84 },
-    { key: "flex", label: "灵活位", y: bodyTop + 263 },
-    { key: "front", label: "前排承伤", y: bodyTop + 442 },
-  ];
-  rows.forEach((row) => {
-    ctx.fillStyle = colors.accent;
-    setFont(ctx, 19, 700);
-    ctx.fillText(row.label, 84, row.y + 49);
-    const members = model.items.filter((item) => item.position === row.key).slice(0, 7);
-    const columns = boardColumns(members.length);
-    members.forEach((item, index) => {
-      const px = 200 + (columns[index] * 105);
-      fillRounded(ctx, px - 5, row.y - 5, 90, 108, 20, "rgba(242,200,98,.08)", "rgba(242,200,98,.18)");
-      drawHeroPortrait(ctx, images, item, px + 4, row.y + 2, 72, audit);
-      ctx.fillStyle = colors.text;
-      ctx.textAlign = "center";
-      setFont(ctx, 15, 700);
-      ctx.fillText(item.name.slice(0, 5), px + 40, row.y + 96);
-      ctx.textAlign = "left";
-    });
-    ctx.strokeStyle = "rgba(242,200,98,.12)";
-    ctx.beginPath();
-    ctx.moveTo(184, row.y + 116);
-    ctx.lineTo(986, row.y + 116);
+  const radius = 53;
+  const xStep = 118;
+  const yStep = 124;
+  const startX = 174;
+  const startY = bodyTop + 82;
+  for (let row = 0; row < 4; row += 1) {
+    for (let col = 0; col < 7; col += 1) {
+      const cx = startX + (col * xStep) + ((row % 2) * (xStep / 2));
+      const cy = startY + (row * yStep);
+      hexPath(ctx, cx, cy, radius);
+      ctx.fillStyle = row < 2 ? "rgba(242,200,98,.055)" : "rgba(130,109,191,.09)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(242,200,98,.24)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+  const occupied = new Set();
+  model.items.slice(0, 9).forEach((item, index) => {
+    let slot = item.boardSlot || fallbackBoardSlot(item, index);
+    while (occupied.has(`${slot.row}:${slot.col}`)) slot = { row: (slot.row + 1) % 4, col: (slot.col + 2) % 7 };
+    occupied.add(`${slot.row}:${slot.col}`);
+    const cx = startX + (slot.col * xStep) + ((slot.row % 2) * (xStep / 2));
+    const cy = startY + (slot.row * yStep);
+    const image = images.get(`remote:${item.imageUrl}`);
+    if (image) {
+      ctx.save();
+      hexPath(ctx, cx, cy - 5, radius - 5);
+      ctx.clip();
+      ctx.drawImage(image, cx - radius + 5, cy - radius, (radius - 5) * 2, (radius - 5) * 2);
+      ctx.restore();
+    }
+    hexPath(ctx, cx, cy - 5, radius - 4);
+    ctx.strokeStyle = colors.accent;
+    ctx.lineWidth = 3;
     ctx.stroke();
+    fillRounded(ctx, cx - 50, cy + 31, 100, 28, 12, "rgba(13,10,24,.88)", "rgba(242,200,98,.34)");
+    ctx.fillStyle = colors.text;
+    ctx.textAlign = "center";
+    setFont(ctx, 14, 800);
+    ctx.fillText(item.name.slice(0, 6), cx, cy + 51);
+    ctx.textAlign = "left";
   });
+  ctx.fillStyle = colors.accent;
+  setFont(ctx, 18, 700);
+  ctx.fillText("敌方侧", 86, startY - 4);
+  ctx.fillText("我方侧", 86, startY + (3 * yStep) + 8);
   const tipY = bodyTop + panelHeight + 18;
   fillRounded(ctx, 64, tipY, 952, 146, 24, "rgba(242,200,98,.12)", "rgba(242,200,98,.28)");
   ctx.fillStyle = colors.accent;
   setFont(ctx, 24, 800);
   ctx.fillText("实战调整", 90, tipY + 45);
   ctx.fillStyle = colors.muted;
-  drawFittedText(ctx, "这是一套按射程与职责生成的基础站位。遇到切后排、范围伤害或同侧集火时，优先给主输出换边，再调整前排保护关系。", 90, tipY + 80, 884, 40, {
-    preferredSize: 20, minSize: 17, weight: 500, lineFactor: 1.25, maxLines: 2,
+  drawFittedText(ctx, "英雄已放入 4×7 真实棋盘格。先按当前赛季职责排基础位置，再参考公开攻略的站位思路；遇到切后排、范围伤害或同侧集火时，优先让主输出换边，再调整前排保护关系。", 90, tipY + 76, 884, 58, {
+    preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.28, maxLines: 2,
   }, audit, "站位实战调整");
   audit.drawnBlocks = model.items.length;
   audit.contentBottom = tipY + 146;
 }
 
+function drawSideRule(ctx, model, images, audit) {
+  const bodyTop = drawTitle(ctx, model, true, audit) + 20;
+  const hasVisual = Boolean(model.visual);
+  const visualWidth = hasVisual ? 340 : 0;
+  if (hasVisual) {
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, visualWidth, 692, 28, "smart");
+  }
+  const cardX = hasVisual ? 424 : 64;
+  const cardWidth = hasVisual ? 592 : 952;
+  const gap = 14;
+  const count = Math.min(4, model.items.length);
+  const cardHeight = Math.floor((692 - (Math.max(0, count - 1) * gap)) / Math.max(1, count));
+  model.items.slice(0, count).forEach((item, index) => {
+    const y = bodyTop + (index * (cardHeight + gap));
+    fillRounded(ctx, cardX, y, cardWidth, cardHeight, 24, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
+    fillRounded(ctx, cardX + 18, y + 18, 54, 54, 18, "rgba(242,200,98,.12)", "rgba(242,200,98,.40)");
+    ctx.fillStyle = colors.accent;
+    ctx.textAlign = "center";
+    setFont(ctx, 19, 800);
+    ctx.fillText(String(index + 1).padStart(2, "0"), cardX + 45, y + 52);
+    ctx.textAlign = "left";
+    ctx.fillStyle = colors.text;
+    drawFittedText(ctx, item.name, cardX + 90, y + 48, cardWidth - 112, 50, {
+      preferredSize: 26, minSize: 20, weight: 800, lineFactor: 1.18, maxLines: 2,
+    }, audit, `侧栏步骤 ${index + 1} 标题`);
+    ctx.fillStyle = colors.muted;
+    drawFittedText(ctx, item.detail, cardX + 24, y + 92, cardWidth - 48, cardHeight - 108, {
+      preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.3, maxLines: 4,
+    }, audit, `侧栏步骤 ${index + 1} 正文`);
+  });
+  audit.drawnBlocks = count;
+  audit.contentBottom = bodyTop + 692;
+}
+
+function drawChecklist(ctx, model, images, audit) {
+  let bodyTop = drawTitle(ctx, model, true, audit) + 18;
+  if (model.visual) {
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, 200, 28, "smart");
+    bodyTop += 218;
+  }
+  const count = Math.min(4, model.items.length);
+  const gap = 14;
+  const available = 1298 - bodyTop;
+  const cardHeight = Math.floor((available - ((count - 1) * gap)) / Math.max(1, count));
+  model.items.slice(0, count).forEach((item, index) => {
+    const y = bodyTop + (index * (cardHeight + gap));
+    fillRounded(ctx, 64, y, 952, cardHeight, 24, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
+    ctx.beginPath();
+    ctx.arc(108, y + (cardHeight / 2), 24, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(76,214,153,.18)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(76,214,153,.55)";
+    ctx.stroke();
+    ctx.fillStyle = "#6ee7b7";
+    setFont(ctx, 24, 800);
+    ctx.textAlign = "center";
+    ctx.fillText("✓", 108, y + (cardHeight / 2) + 9);
+    ctx.textAlign = "left";
+    ctx.fillStyle = colors.text;
+    drawFittedText(ctx, item.name, 150, y + 46, 828, 44, { preferredSize: 25, minSize: 20, weight: 800, lineFactor: 1.15, maxLines: 1 }, audit, `清单 ${index + 1} 标题`);
+    ctx.fillStyle = colors.muted;
+    drawFittedText(ctx, item.detail, 150, y + 83, 828, cardHeight - 96, { preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.28, maxLines: 3 }, audit, `清单 ${index + 1} 正文`);
+  });
+  audit.drawnBlocks = count;
+  audit.contentBottom = bodyTop + available;
+}
+
 function drawRule(ctx, model, images, audit) {
   if (model.layoutStyle === "roster") return drawRoster(ctx, model, images, audit);
   if (model.layoutStyle === "board") return drawBoard(ctx, model, images, audit);
+  if (["timeline", "comparison"].includes(model.layoutStyle)) return drawSideRule(ctx, model, images, audit);
+  if (model.layoutStyle === "checklist") return drawChecklist(ctx, model, images, audit);
   const density = model.contentDensity || getRulePageDensity(model);
   let bodyTop = drawTitle(ctx, model, true, audit) + 18;
   if (model.visual) {
@@ -789,7 +908,7 @@ function drawRule(ctx, model, images, audit) {
   model.items.forEach((item, index) => {
     const card = layout.cards[index];
     const isOddLast = model.items.length % 2 === 1 && index === model.items.length - 1;
-    const x = isOddLast ? 64 : 64 + ((index % 2) * (width + layout.gap));
+    const x = isOddLast && model.items.length === 3 ? 306.5 : isOddLast ? 64 : 64 + ((index % 2) * (width + layout.gap));
     drawRuleCard(ctx, item, images, x, card.y, isOddLast ? 952 : width, card.height, audit, index, density);
   });
   audit.drawnBlocks = model.items.length;

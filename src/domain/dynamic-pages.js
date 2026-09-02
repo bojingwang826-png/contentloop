@@ -245,8 +245,8 @@ function shortName(value, index) {
 }
 
 function boundedDetail(value) {
-  let text = String(value || "").replace(/。{2,}/gu, "。").slice(0, 109).replace(/[，、；：]$/u, "");
-  if (text.length < 38) text = `${text.replace(/[。]$/u, "")}，方便对局中快速复核`;
+  let text = String(value || "").replace(/。{2,}/gu, "。").slice(0, 148).replace(/[，、；：]$/u, "");
+  if (text.length < 58) text = `${text.replace(/[。]$/u, "")}，再结合当前来牌、装备和对手站位复核，读完就能知道下一步怎么做`;
   return `${text.replace(/[。]$/u, "")}。`;
 }
 
@@ -344,7 +344,16 @@ export function enrichOutlineWithGameData(outline, topic) {
         `中期衔接：${joinNames(entities.filter((item) => Number(item.cost) === 3).map((item) => item.name))}`,
         `后期核心：${joinNames(highCost)}`,
       ],
+      layoutStyle: "timeline",
       assetNeeds: ["真实英雄费用与头像"],
+    });
+    if (page.pageNo === 6) return enrichPage(page, {
+      layoutStyle: "comparison",
+      assetNeeds: ["与本页判断条件对应的当前赛季素材"],
+    });
+    if (page.pageNo === 7) return enrichPage(page, {
+      layoutStyle: "checklist",
+      assetNeeds: ["便于收藏复核的主题素材"],
     });
     return page;
   });
@@ -358,13 +367,14 @@ function materializeEntity(entity, index, layoutStyle) {
     name: entity.name,
     detail: layoutStyle === "board"
       ? `${positionText} · ${traits || "根据阵容职责调整"}`
-      : `${entity.cost || "?"}费 · ${traits || "当前赛季英雄"}`,
+      : `${entity.cost || "?"}费，拥有${traits || "当前赛季"}羁绊。基础职责是${positionText}，组阵时要同时看费用曲线、技能射程和相邻队友，不能只按英雄名照抄。`,
     example: layoutStyle === "board" ? `${positionText}，实战按对手换边` : `${positionText} · 先确认来牌与费用再决定是否追星`,
     imageUrl: entity.imageUrl || "",
     cost: entity.cost || 0,
     traits: entity.traits || [],
     position: entity.position || "flex",
     positionLabel: positionText,
+    boardSlot: entity.boardSlot || null,
     number: index + 1,
   };
 }

@@ -22,10 +22,10 @@ const bundle = {
 
 test("新赛季阵容候选包含真实英雄名字与官方头像", () => {
   const result = buildGameResearch("新赛季阵容推荐", bundle);
-  assert.equal(result.season, "S18");
-  assert.equal(result.topics.length, 3);
+  assert.match(result.season, /^S18/);
+  assert.equal(result.topics.length, 5);
   assert.ok(result.topics.every((topic) => topic.entities.length >= 3));
-  assert.ok(result.topics.every((topic) => topic.entities.every((item) => item.imageUrl.startsWith("https://ddragon.leagueoflegends.com/"))));
+  assert.ok(result.topics.every((topic) => topic.entities.every((item) => item.imageUrl.startsWith("https://raw.communitydragon.org/latest/game/"))));
 });
 
 test("指定羁绊时优先生成该真实羁绊和成员解析", () => {
@@ -56,8 +56,9 @@ test("实时题目的官方素材会进入第四步页面并被预览模型保�
   assert.equal(project.pages[3].layoutStyle, "board");
   const model = buildPageRenderModel(project.pages[0], "铲友研究所", 7);
   assert.equal(model.heroEntities.length, 3);
-  assert.ok(model.heroEntities.every((item) => item.imageUrl.startsWith("https://ddragon.leagueoflegends.com/")));
+  assert.ok(model.heroEntities.every((item) => item.imageUrl.startsWith("https://raw.communitydragon.org/latest/game/")));
   const boardModel = buildPageRenderModel(project.pages[3], "铲友研究所", 7);
   assert.equal(boardModel.layoutStyle, "board");
   assert.deepEqual(boardModel.items.map((item) => item.position), ["back", "front", "back"]);
+  assert.ok(boardModel.items.every((item) => Number.isInteger(item.boardSlot.row) && Number.isInteger(item.boardSlot.col)));
 });

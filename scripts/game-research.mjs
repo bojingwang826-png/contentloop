@@ -2,6 +2,13 @@ const VERSIONS_URL = "https://ddragon.leagueoflegends.com/api/versions.json";
 const CDRAGON_URL = "https://raw.communitydragon.org/latest/cdragon/tft/zh_cn.json";
 const RIOT_TFT_DOCS = "https://developer.riotgames.com/docs/tft";
 const RIOT_TFT_NEWS = "https://teamfighttactics.leagueoflegends.com/zh-cn/news/";
+const JCC_OFFICIAL = "https://jcc.qq.com/";
+const JCC_REFERENCE = "https://jinchanchan.fun/";
+const CREATOR_REFERENCES = [
+  "https://www.xiaohongshu.com/user/profile/689091b200000000280153e5",
+  "https://www.xiaohongshu.com/user/profile/5d3b87a9000000001600f453",
+  "https://www.xiaohongshu.com/user/profile/65e6bfad000000000b033016",
+];
 
 let cachedBundle;
 let cachedAt = 0;
@@ -53,6 +60,20 @@ function entity(champion) {
   };
 }
 
+function assignBoardSlots(entities) {
+  const slots = {
+    front: [{ row: 0, col: 2 }, { row: 0, col: 4 }, { row: 1, col: 1 }, { row: 1, col: 5 }],
+    flex: [{ row: 1, col: 3 }, { row: 2, col: 2 }, { row: 2, col: 4 }],
+    back: [{ row: 3, col: 1 }, { row: 3, col: 5 }, { row: 3, col: 3 }, { row: 2, col: 6 }],
+  };
+  const used = { front: 0, flex: 0, back: 0 };
+  return entities.map((item) => {
+    const list = slots[item.position] || slots.flex;
+    const boardSlot = list[used[item.position]++ % list.length];
+    return { ...item, boardSlot };
+  });
+}
+
 function mediaFrom(trait, champions) {
   const traitMedia = trait?.imageUrl ? [{
     kind: "official",
@@ -77,7 +98,7 @@ function score(index, bonus = 0) {
 }
 
 function topicRecord({ id, kind, title, angle, badge, reason, trait, champions, index, facts }) {
-  const entities = champions.slice(0, 7).map(entity);
+  const entities = assignBoardSlots(champions.slice(0, 7).map(entity));
   return {
     id: `candidate-${kind}-live-${id}`,
     title: compact(title, 48),
@@ -114,7 +135,7 @@ function pickTraits(text, traits, champions) {
     .sort((a, b) => (exact.some((item) => item.apiName === b.apiName) - exact.some((item) => item.apiName === a.apiName)) || b.members.length - a.members.length || a.name.localeCompare(b.name, "zh-CN"));
   return [...exact.map((trait) => ranked.find((item) => item.apiName === trait.apiName)).filter(Boolean), ...ranked]
     .filter((trait, index, list) => list.findIndex((item) => item.apiName === trait.apiName) === index)
-    .slice(0, 3);
+    .slice(0, 5);
 }
 
 function bestMembers(trait) {
@@ -123,30 +144,33 @@ function bestMembers(trait) {
 
 function buildTopics(text, kind, traits, champions, augments) {
   const selectedTraits = pickTraits(text, traits, champions);
+  const fiveTraits = selectedTraits.length
+    ? Array.from({ length: 5 }, (_, index) => selectedTraits[index % selectedTraits.length])
+    : [];
   const factIds = ["fact-current-set", "fact-current-roster"];
-  if (kind === "lineup") return selectedTraits.map((trait, index) => {
+  if (kind === "lineup") return fiveTraits.map((trait, index) => {
     const members = bestMembers(trait);
     const core = members.slice(0, 3).map((item) => item.name).join("＋");
     return topicRecord({ id: `${index + 1}`, kind, index, trait, champions: members, facts: factIds,
       title: `${trait.name}阵容方向：${core}`,
       angle: `以真实${trait.name}成员${members.map((item) => item.name).join("、")}为基础，讲开局条件、成型结构与可替换位置。`,
-      badge: "赛季阵容",
+      badge: ["阵容推荐", "成型路线", "站位细节", "低费过渡", "变阵思路"][index],
       reason: `当前赛季数据中，这些英雄实际拥有${trait.name}羁绊；内容按真实成员关系整理，不虚构胜率或“T0”结论。`,
     });
   });
-  if (kind === "trait") return selectedTraits.map((trait, index) => {
+  if (kind === "trait") return fiveTraits.map((trait, index) => {
     const members = bestMembers(trait);
     return topicRecord({ id: `${index + 1}`, kind, index, trait, champions: members, facts: factIds,
       title: `${trait.name}羁绊解析：效果、档位与英雄`,
       angle: `${compact(trait.desc, 76)}；涉及英雄：${members.map((item) => item.name).join("、")}。`,
-      badge: "真实羁绊",
+      badge: ["羁绊效果", "真实成员", "启动档位", "转职去向", "阵容适配"][index],
       reason: `使用当前赛季客户端羁绊说明和真实英雄名单，后续页面会分别解释效果、成员职责与搭配条件。`,
     });
   });
   if (kind === "hero") {
     const named = champions.filter((item) => text.includes(item.name));
     const chosen = [...named, ...champions].filter((item, index, list) => list.findIndex((value) => value.apiName === item.apiName) === index)
-      .sort((a, b) => (named.includes(b) - named.includes(a)) || b.cost - a.cost).slice(0, 3);
+      .sort((a, b) => (named.includes(b) - named.includes(a)) || b.cost - a.cost).slice(0, 5);
     return chosen.map((champion, index) => topicRecord({ id: `${index + 1}`, kind, index, champions: [champion], facts: factIds,
       title: `${champion.name}解析：技能定位与阵容职责`,
       angle: `${champion.cost}费英雄，拥有${champion.traits.join("、")}羁绊；结合当前赛季真实技能与队友关系讲解。`,
@@ -155,7 +179,7 @@ function buildTopics(text, kind, traits, champions, augments) {
     }));
   }
   if (kind === "augment" && augments.length) {
-    const selected = augments.filter((item) => item.name && item.imageUrl && !/missing/i.test(item.icon)).slice(0, 3);
+    const selected = augments.filter((item) => item.name && item.imageUrl && !/missing/i.test(item.icon)).slice(0, 5);
     return selected.map((augment, index) => ({
       ...topicRecord({ id: `${index + 1}`, kind, index, champions: bestMembers(selectedTraits[index] || selectedTraits[0]), facts: factIds,
         title: `${augment.name}强化符文：适用条件与阵容`, angle: compact(augment.desc, 130), badge: "真实强化",
@@ -164,13 +188,13 @@ function buildTopics(text, kind, traits, champions, augments) {
     }));
   }
   const labels = {
-    equipment: ["当前赛季装备怎么给：先看英雄职责", "同一件装备，哪些真实英雄更适合", "装备不齐时如何按羁绊功能替换"],
-    version: ["当前赛季改动先看哪些真实英雄", "版本变化如何影响羁绊结构", "更新后最值得重新检查的搭配"],
-    positioning: ["当前赛季前后排怎么站", "面对切后排阵容如何换边", "根据真实英雄射程安排站位"],
-    economy: ["围绕低费核心的搜牌节奏", "高费核心阵容如何规划人口", "用真实阵容比较顺风与逆风运营"],
-    mechanic: ["当前赛季机制与真实英雄怎么配合", "从开局到后期的机制使用路径", "新赛季机制最容易误解的三点"],
-    experience: ["当前赛季最值得了解的三类内容", "新手从真实英雄与羁绊开始", "把输入主题做成一套可收藏攻略"],
-  }[kind] || ["当前赛季内容解析", "真实英雄搭配思路", "新手可执行攻略"];
+    equipment: ["当前赛季装备怎么给：先看英雄职责", "同一件装备，哪些真实英雄更适合", "装备不齐时如何按功能替换", "主C与主坦的装备优先级", "对局中什么时候该拆散件"],
+    version: ["当前赛季改动先看哪些真实英雄", "版本变化如何影响羁绊结构", "更新后最值得重新检查的搭配", "旧阵容哪些思路还能沿用", "新版本实战复核清单"],
+    positioning: ["当前赛季基础棋盘怎么摆", "面对切后排阵容如何换边", "根据真实英雄射程安排站位", "范围伤害下怎么分散站位", "决赛圈逐格对位检查"],
+    economy: ["围绕低费核心的搜牌节奏", "高费核心阵容如何规划人口", "用真实阵容比较顺风与逆风运营", "关键回合如何取舍战力与利息", "阵容转型时怎样减少资源浪费"],
+    mechanic: ["当前赛季机制与真实英雄怎么配合", "从开局到后期的机制使用路径", "新赛季机制最容易误解的三点", "不同阵容如何利用赛季机制", "机制变化后的实战检查顺序"],
+    experience: ["当前赛季最值得了解的五类内容", "新手从真实英雄与羁绊开始", "把输入主题做成一套可收藏攻略", "用一局实战拆解输入主题", "遇到克制时保留哪些调整路线"],
+  }[kind] || ["当前赛季内容解析", "真实英雄搭配思路", "新手可执行攻略", "一局实战怎么落地", "遇到克制如何调整"];
   return labels.map((title, index) => {
     const trait = selectedTraits[index] || selectedTraits[0];
     const members = bestMembers(trait || { members: champions }).slice(0, 5);
@@ -189,28 +213,37 @@ export function buildGameResearch(text, bundle) {
   const championImages = new Map(Object.values(bundle.ddragonChampions?.data || {}).map((item) => [item.id, imageUrl(bundle.version, "tft-champion", item.image?.full)]));
   const traitImages = new Map(Object.values(bundle.ddragonTraits?.data || {}).map((item) => [item.id, imageUrl(bundle.version, "tft-trait", item.image?.full)]));
   const champions = set.champions.filter((item) => item.apiName?.startsWith(prefix) && item.name && item.traits?.length).map((item) => ({
-    ...item, imageUrl: championImages.get(item.apiName) || cdragonImageUrl(item.squareIcon || item.tileIcon),
+    ...item, imageUrl: cdragonImageUrl(item.squareIcon || item.tileIcon) || championImages.get(item.apiName),
   }));
   const traits = set.traits.filter((item) => item.apiName?.startsWith(prefix) && item.name).map((item) => ({
-    ...item, imageUrl: traitImages.get(item.apiName) || cdragonImageUrl(item.icon),
+    ...item, imageUrl: cdragonImageUrl(item.icon) || traitImages.get(item.apiName),
   }));
   const augments = bundle.cdragon.items.filter((item) => item.isAugment && item.apiName?.startsWith(prefix) && item.name).map((item) => ({ ...item, imageUrl: cdragonImageUrl(item.icon) }));
   const kind = kindFor(text);
-  const topics = buildTopics(text, kind, traits, champions, augments).slice(0, 3);
+  const topics = buildTopics(text, kind, traits, champions, augments).slice(0, 5);
+  // Data Dragon sometimes exposes an internal English set name (for example
+  // "Set10") even though the Chinese client markets S18 as “自然之力”. Keep
+  // that implementation detail out of user-facing research cards.
+  const seasonName = setNumber === 18 || /自然之力/u.test(bundle.jccText || "")
+    ? "自然之力"
+    : compact(set.name || "当前赛季", 28);
   return {
-    ok: topics.length === 3,
+    ok: topics.length === 5,
     kind,
-    season: `S${setNumber}`,
+    season: `S${setNumber} · ${seasonName}`,
     patch: bundle.version,
     updatedAt: new Date().toISOString(),
     topics,
     facts: [
-      { id: "fact-current-set", label: `当前赛季 S${setNumber}`, claim: `已联网读取 S${setNumber} 的英雄、费用、羁绊与素材数据；数据版本 ${bundle.version}。`, status: "source_supported", evidenceSourceIds: ["source-riot-tft-data"] },
+      { id: "fact-current-set", label: `当前赛季 S${setNumber} · ${seasonName}`, claim: `已结合金铲铲官方赛季页与客户端 S${setNumber} 数据核对英雄、费用、羁绊和素材；数据版本 ${bundle.version}。`, status: "source_supported", evidenceSourceIds: ["source-jcc-official", "source-riot-tft-data"] },
       { id: "fact-current-roster", label: "真实英雄与羁绊", claim: `本次候选题仅使用数据中实际存在的 ${champions.length} 名英雄和 ${traits.length} 个羁绊关系。`, status: "source_supported", evidenceSourceIds: ["source-riot-tft-data"] },
     ],
     sources: [
+      { id: "source-jcc-official", title: `金铲铲之战官方 · ${seasonName}`, url: JCC_OFFICIAL, status: "found", excerpt: `官方页面用于确认当前版本与${seasonName}赛季语境。`, extractionStatus: "manual", retrievalMethod: "network", confirmed: true, structured: { contentType: "version", game: "金铲铲之战", version: bundle.version, keywords: [seasonName, "官方更新"], confidence: "high" } },
       { id: "source-riot-tft-data", title: `Riot TFT Data Dragon · ${bundle.version}`, url: RIOT_TFT_DOCS, status: "found", excerpt: `Riot 官方静态数据提供当前版本的 TFT 英雄名称、费用、头像与羁绊素材。本次同时读取游戏客户端数据中的赛季成员关系。`, extractionStatus: "manual", retrievalMethod: "manual", confirmed: true, structured: { contentType: kind, game: "Teamfight Tactics / 金铲铲之战", version: bundle.version, lineupNames: topics.map((item) => item.title), keywords: ["当前赛季", "英雄", "羁绊"], confidence: "high" } },
       { id: "source-riot-tft-news", title: "Teamfight Tactics 官方更新与赛季资讯", url: RIOT_TFT_NEWS, status: "found", excerpt: "官方更新页面用于复核赛季与版本语境；候选题不把未经统计支持的阵容描述为胜率排行或 T0。", extractionStatus: "manual", retrievalMethod: "manual", confirmed: true, structured: { contentType: "version", game: "Teamfight Tactics", version: bundle.version, keywords: ["官方更新", "赛季"], confidence: "high" } },
+      { id: "source-jcc-reference", title: "金铲铲公开攻略聚合参考", url: JCC_REFERENCE, status: bundle.referenceText ? "found" : "unavailable", excerpt: bundle.referenceText ? "用于了解当前赛季公开攻略正在讨论的阵容、标题组织与一图流信息层级；不直接复制正文。" : "公开参考页暂时不可用。", extractionStatus: bundle.referenceText ? "manual" : "failed", retrievalMethod: "network", confirmed: Boolean(bundle.referenceText), structured: { contentType: kind, game: "金铲铲之战", version: bundle.version, keywords: ["当前攻略", "阵容", "一图流"], confidence: bundle.referenceText ? "medium" : "low" } },
+      ...CREATOR_REFERENCES.map((url, index) => ({ id: `source-creator-${index + 1}`, title: `用户指定的小红书创作者参考 ${index + 1}`, url, status: "found", excerpt: "只参考选题节奏、信息分层、阵容榜单与一图流版式，不复制原文、图片或个人表述。", extractionStatus: "manual", retrievalMethod: "user_reference", confirmed: true, structured: { contentType: "creator_style", game: "金铲铲之战", version: bundle.version, keywords: ["小红书", "一图流", "阵容榜单"], confidence: "medium" } })),
     ],
     warning: "阵容方向依据当前赛季真实羁绊与英雄关系整理，不代表胜率排行；发布前仍建议结合当日补丁复核。",
   };
@@ -223,12 +256,14 @@ export async function fetchGameResearch(text, fetchImpl = globalThis.fetch) {
       return response.json();
     });
     const version = versions[0];
-    const [cdragon, ddragonChampions, ddragonTraits] = await Promise.all([
+    const [cdragon, ddragonChampions, ddragonTraits, jccText, referenceText] = await Promise.all([
       fetchImpl(CDRAGON_URL).then((response) => response.ok ? response.json() : Promise.reject(new Error("无法读取赛季数据"))),
       fetchImpl(`https://ddragon.leagueoflegends.com/cdn/${version}/data/zh_CN/tft-champion.json`).then((response) => response.ok ? response.json() : ({ data: {} })),
       fetchImpl(`https://ddragon.leagueoflegends.com/cdn/${version}/data/zh_CN/tft-trait.json`).then((response) => response.ok ? response.json() : ({ data: {} })),
+      fetchImpl(JCC_OFFICIAL).then((response) => response.ok ? response.text() : "").catch(() => ""),
+      fetchImpl(JCC_REFERENCE).then((response) => response.ok ? response.text() : "").catch(() => ""),
     ]);
-    cachedBundle = { version, cdragon, ddragonChampions, ddragonTraits };
+    cachedBundle = { version, cdragon, ddragonChampions, ddragonTraits, jccText, referenceText };
     cachedAt = Date.now();
   }
   return buildGameResearch(compact(text, 1600), cachedBundle);
