@@ -87,6 +87,32 @@ function markdownText(raw) {
     .trim();
 }
 
+function decodeHtml(value) {
+  const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+  return String(value || "").replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_, token) => {
+    if (token[0] === "#") {
+      const hex = token[1]?.toLowerCase() === "x";
+      const point = Number.parseInt(token.slice(hex ? 2 : 1), hex ? 16 : 10);
+      return Number.isFinite(point) ? String.fromCodePoint(point) : " ";
+    }
+    return named[token.toLowerCase()] || " ";
+  });
+}
+
+function readableHtml(raw) {
+  const html = String(raw || "");
+  const selected = /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(html)?.[1]
+    || /<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(html)?.[1]
+    || /<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(html)?.[1]
+    || html;
+  return decodeHtml(selected
+    .replace(/<(script|style|svg|noscript|template|nav|footer|header|aside|form|dialog|button)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<!--([\s\S]*?)-->/g, " ")
+    .replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function extractRecipes(text) {
   const recipes = [];
   const seen = new Set();
@@ -129,29 +155,66 @@ function extractStructured(text, title) {
 
 async function extractPublicSource(value) {
   const target = validatePublicUrl(value);
-  const readerUrl = new URL(`https://r.jina.ai/${target.href}`);
-  const response = await fetch(readerUrl, {
-    headers: { accept: "text/plain; charset=utf-8", "x-no-cache": "true" },
-    signal: AbortSignal.timeout(readerTimeoutMs),
-  });
-  if (!response.ok) throw Object.assign(new Error(`兼容阅读器返回 ${response.status}`), { statusCode: 422 });
-  const raw = await readBounded(response);
-  const title = compact(/^Title:[ \t]*(.+)$/im.exec(raw)?.[1], 160) || target.hostname;
-  const publishedAt = compact(/^Published Time:[ \t]*(.+)$/im.exec(raw)?.[1], 40);
-  const text = markdownText(raw);
-  const blocked = /(Target URL returned error|登录后你可以|安全验证|Access Denied|Forbidden)/i.test(`${raw.slice(0, 600)} ${text.slice(0, 300)}`);
-  if (text.length < 20 || blocked) throw Object.assign(new Error("网页返回的是登录页或拦截页，没有把它当成正文"), { statusCode: 422 });
-  return {
-    status: "extracted",
-    url: target.href,
-    title,
-    author: compact(/^Author:[ \t]*(.+)$/im.exec(raw)?.[1], 100),
-    publishedAt,
-    excerpt: compact(text, 1200),
-    structured: extractStructured(text, title),
-    retrievalMethod: "reader",
-    failureReason: "",
-  };
+  let directError;
+  try {
+    const direct = await fetch(target, {
+      redirect: "follow",
+      headers: {
+        accept: "text/html,text/plain;q=0.9",
+        "accept-language": "zh-CN,zh;q=0.9,en;q=0.7",
+        "user-agent": "Mozilla/5.0 AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!direct.ok) throw new Error(`网页返回 ${direct.status}`);
+    const contentType = direct.headers.get("content-type") || "";
+    if (!/text\/(html|plain)/i.test(contentType)) throw new Error("这个链接不是可读取的公开网页");
+    const raw = await readBounded(direct);
+    const title = compact(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(raw)?.[1], 160) || target.hostname;
+    const text = /text\/plain/i.test(contentType) ? compact(raw, 12_000) : readableHtml(raw).slice(0, 12_000);
+    if (text.length < 20) throw new Error("网页没有可读取的公开正文");
+    return {
+      status: "extracted",
+      url: direct.url || target.href,
+      title: decodeHtml(title),
+      author: "",
+      publishedAt: "",
+      excerpt: compact(text, 1200),
+      structured: extractStructured(text, title),
+      retrievalMethod: "direct",
+      failureReason: "",
+    };
+  } catch (error) {
+    directError = error;
+  }
+
+  try {
+    const readerUrl = new URL(`https://r.jina.ai/${target.href}`);
+    const response = await fetch(readerUrl, {
+      headers: { accept: "text/plain; charset=utf-8", "x-no-cache": "true" },
+      signal: AbortSignal.timeout(readerTimeoutMs),
+    });
+    if (!response.ok) throw new Error(`兼容阅读器返回 ${response.status}`);
+    const raw = await readBounded(response);
+    const title = compact(/^Title:[ \t]*(.+)$/im.exec(raw)?.[1], 160) || target.hostname;
+    const publishedAt = compact(/^Published Time:[ \t]*(.+)$/im.exec(raw)?.[1], 40);
+    const text = markdownText(raw);
+    const blocked = /(Target URL returned error|登录后你可以|安全验证|Access Denied|Forbidden)/i.test(`${raw.slice(0, 600)} ${text.slice(0, 300)}`);
+    if (text.length < 20 || blocked) throw new Error("网页返回的是登录页或拦截页，没有把它当成正文");
+    return {
+      status: "extracted",
+      url: target.href,
+      title,
+      author: compact(/^Author:[ \t]*(.+)$/im.exec(raw)?.[1], 100),
+      publishedAt,
+      excerpt: compact(text, 1200),
+      structured: extractStructured(text, title),
+      retrievalMethod: "reader",
+      failureReason: "",
+    };
+  } catch (readerError) {
+    throw Object.assign(new Error(`直接读取失败（${directError?.message || "未知原因"}），兼容解析也失败（${readerError?.message || "未知原因"}）`), { statusCode: 422 });
+  }
 }
 
 let cachedAiKey = "";
