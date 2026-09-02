@@ -195,7 +195,7 @@ function planPageVisuals(pages, topic, kind) {
     ? topic.media.filter((item) => /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//i.test(String(item?.source || "")))
     : [];
   if (liveMedia.length) {
-    const targetPages = pages.filter((page) => page.pageNo === 1 || page.pageNo >= 3);
+    const targetPages = pages.filter((page) => page.pageNo >= 3 && page.layoutStyle !== "board");
     targetPages.forEach((page, index) => {
       const media = liveMedia[index % liveMedia.length];
       planned.set(page.pageNo, {
@@ -268,8 +268,110 @@ function fillPagePoints(page) {
   return points;
 }
 
+function entityNames(entities, position = "") {
+  return entities.filter((item) => !position || item.position === position).map((item) => item.name);
+}
+
+function joinNames(names, fallback = "根据本局来牌灵活调整") {
+  return names.length ? names.join("、") : fallback;
+}
+
+function enrichPage(page, patch) {
+  return {
+    ...page,
+    ...patch,
+    factIds: [...(page.factIds || [])],
+    assetNeeds: [...new Set([...(page.assetNeeds || []), ...(patch.assetNeeds || [])])],
+  };
+}
+
+export function enrichOutlineWithGameData(outline, topic) {
+  if (!outline?.pages?.length) return outline;
+  const kind = topicKind(topic);
+  const entities = Array.isArray(topic?.entities) ? topic.entities.filter((item) => item?.name) : [];
+  if (!entities.length || kind === "equipment") return outline;
+  const traitName = topic?.gameData?.traitName || (kind === "lineup" || kind === "trait" ? "核心羁绊" : "本题阵容");
+  const tiers = (topic?.gameData?.traitTiers || []).filter(Boolean);
+  const front = entityNames(entities, "front");
+  const back = entityNames(entities, "back");
+  const flex = entityNames(entities, "flex");
+  const lowCost = entities.filter((item) => Number(item.cost) <= 2).map((item) => item.name);
+  const highCost = entities.filter((item) => Number(item.cost) >= 4).map((item) => item.name);
+  const pages = outline.pages.map((page) => {
+    if (page.pageNo === 1) return enrichPage(page, {
+      summary: `${topic.angle || page.summary} 本篇使用当前赛季真实英雄名单与官方头像。`,
+      keyPoints: [`真实成员：${joinNames(entities.slice(0, 4).map((item) => item.name))}`, `${traitName}效果与开启条件`, "基础建议站位与临场换边"],
+      assetNeeds: ["当前赛季英雄官方头像"],
+    });
+    if (page.pageNo === 2 && entities.length >= 3) return enrichPage(page, {
+      kicker: "先认真实成员",
+      title: `${traitName}有哪些英雄`,
+      summary: `按费用、羁绊和基础职责认识 ${entities.length} 名真实成员，不再用泛化文字代替阵容内容。`,
+      keyPoints: entities.slice(0, 7).map((item) => `${item.name}：${item.cost || "?"}费 · ${(item.traits || []).join(" / ") || traitName} · ${item.positionLabel || "灵活位"}`),
+      layoutStyle: "roster",
+      assetNeeds: ["真实英雄名单与官方头像"],
+    });
+    if (page.pageNo === 3 && (kind === "lineup" || kind === "trait")) return enrichPage(page, {
+      kicker: "再看羁绊效果",
+      title: `${traitName}怎么开、强在哪里`,
+      summary: topic?.gameData?.traitDescription || `结合当前赛季资料解释${traitName}的效果和成员关系。`,
+      keyPoints: [
+        tiers.length ? `开启档位：${tiers.join(" / ")}` : `实际成员：${joinNames(entities.map((item) => item.name))}`,
+        `可用前排：${joinNames(front, "优先选择能稳定承伤的成员")}`,
+        `后排与输出：${joinNames(back, joinNames(flex))}`,
+      ],
+      layoutStyle: "trait",
+      assetNeeds: [`${traitName}官方羁绊素材`],
+    });
+    if (page.pageNo === 4 && entities.length >= 3) return enrichPage(page, {
+      kicker: "基础建议站位",
+      title: `${traitName}英雄怎么摆`,
+      summary: "依据英雄射程与职责生成基础站位；这是可执行的起点，实战仍需根据对手换边和防切入。",
+      keyPoints: [
+        `前排承伤：${joinNames(front)}`,
+        `后排输出：${joinNames(back)}`,
+        `灵活调整：${joinNames(flex)}`,
+      ],
+      layoutStyle: "board",
+      assetNeeds: ["英雄头像站位图"],
+    });
+    if (page.pageNo === 5) return enrichPage(page, {
+      kicker: "过渡到成型",
+      title: `${traitName}的低费过渡与高费终点`,
+      summary: "把真实成员按费用拆开，先保证当前战力，再逐步替换到高费核心。",
+      keyPoints: [
+        `前期可留：${joinNames(lowCost)}`,
+        `中期衔接：${joinNames(entities.filter((item) => Number(item.cost) === 3).map((item) => item.name))}`,
+        `后期核心：${joinNames(highCost)}`,
+      ],
+      assetNeeds: ["真实英雄费用与头像"],
+    });
+    return page;
+  });
+  return { ...outline, pages };
+}
+
+function materializeEntity(entity, index, layoutStyle) {
+  const traits = (entity.traits || []).join(" / ");
+  const positionText = entity.positionLabel || "灵活位";
+  return {
+    name: entity.name,
+    detail: layoutStyle === "board"
+      ? `${positionText} · ${traits || "根据阵容职责调整"}`
+      : `${entity.cost || "?"}费 · ${traits || "当前赛季英雄"}`,
+    example: layoutStyle === "board" ? `${positionText}，实战按对手换边` : `${positionText} · 先确认来牌与费用再决定是否追星`,
+    imageUrl: entity.imageUrl || "",
+    cost: entity.cost || 0,
+    traits: entity.traits || [],
+    position: entity.position || "flex",
+    positionLabel: positionText,
+    number: index + 1,
+  };
+}
+
 function outlinePageToEditorPage(page, topic, visualPlan) {
   const kind = topicKind(topic);
+  const entities = Array.isArray(topic?.entities) ? topic.entities.slice(0, 7) : [];
   const base = {
     id: `dynamic-page-${page.pageNo}`,
     pageNo: page.pageNo,
@@ -285,13 +387,24 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     manualOrder: [],
     visual: visualPlan.get(page.pageNo) || null,
     contentKind: kind,
+    layoutStyle: page.layoutStyle || "cards",
     layoutVersion: 3,
   };
   if (page.pageNo === 1) {
     return {
       ...base,
       type: "cover",
+      featuredEntities: entities,
       blocks: [{ kind: "chips", items: page.keyPoints.slice(0, 3) }],
+    };
+  }
+  if (["roster", "board"].includes(page.layoutStyle) && entities.length) {
+    return {
+      ...base,
+      type: "rule",
+      featuredEntities: entities,
+      visual: null,
+      blocks: [{ kind: "steps", items: entities.map((item, index) => materializeEntity(item, index, page.layoutStyle)) }],
     };
   }
   if (page.pageNo === 2) {
@@ -358,9 +471,10 @@ export function materializeDynamicProject(customProject) {
   if (customProject.outline.pages?.length !== 7) throw new Error("动态大纲必须正好包含 7 页");
   const viewpoint = customProject.research.viewpoints.find((item) => item.id === customProject.viewpointId);
   if (!viewpoint) throw new Error("动态观点不存在，请返回研究页重新选择");
+  const outline = enrichOutlineWithGameData(customProject.outline, customProject.topic);
   const kind = topicKind(customProject.topic);
-  const visualPlan = planPageVisuals(customProject.outline.pages, customProject.topic, kind);
-  const pages = customProject.outline.pages.map((page) => outlinePageToEditorPage(page, customProject.topic, visualPlan));
+  const visualPlan = planPageVisuals(outline.pages, customProject.topic, kind);
+  const pages = outline.pages.map((page) => outlinePageToEditorPage(page, customProject.topic, visualPlan));
   const iconNames = pages.flatMap((page) => page.blocks[0]?.items || []).flatMap((item) => (
     typeof item === "object" && item.iconName ? [item.iconName] : []
   ));

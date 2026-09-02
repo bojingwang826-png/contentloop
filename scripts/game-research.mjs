@@ -8,7 +8,7 @@ let cachedAt = 0;
 const CACHE_MS = 30 * 60 * 1000;
 
 function compact(value, max = 180) {
-  return String(value || "").replace(/<br\s*\/?>/gi, "；").replace(/<[^>]+>/g, " ").replace(/%i:[^%]+%/gi, "").replace(/@[^@]+@/g, "").replace(/；\s*；/g, "；").replace(/\s+/g, " ").trim().slice(0, max);
+  return String(value || "").replace(/<br\s*\/?>/gi, "；").replace(/<[^>]+>/g, " ").replace(/%i:[^%]+%/gi, "").replace(/@[^@]+@/g, "").replace(/[（(]\s*[）)]/g, "").replace(/；\s*；/g, "；").replace(/\s*([，。；])/g, "$1").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 function imageUrl(version, group, file) {
@@ -38,12 +38,18 @@ function kindFor(text) {
 }
 
 function entity(champion) {
+  const range = Number(champion.stats?.range || 0);
+  const position = range >= 3 ? "back" : range > 0 && range <= 1 ? "front" : "flex";
   return {
     name: champion.name,
     cost: Number(champion.cost || champion.tier || 0),
     traits: champion.traits || [],
     imageUrl: champion.imageUrl,
     alt: `${champion.name}英雄头像`,
+    range,
+    role: champion.role || "",
+    position,
+    positionLabel: position === "front" ? "前排" : position === "back" ? "后排" : "灵活位",
   };
 }
 
@@ -90,6 +96,7 @@ function topicRecord({ id, kind, title, angle, badge, reason, trait, champions, 
     gameData: {
       traitName: trait?.name || "",
       traitDescription: compact(trait?.desc, 260),
+      traitTiers: (trait?.effects || []).map((effect) => Number(effect.minUnits || 0)).filter(Boolean),
       heroNames: entities.map((item) => item.name),
     },
   };

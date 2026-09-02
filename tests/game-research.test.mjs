@@ -1,14 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildGameResearch } from "../scripts/game-research.mjs";
-import { materializeDynamicProject } from "../src/domain/dynamic-pages.js";
+import { enrichOutlineWithGameData, materializeDynamicProject } from "../src/domain/dynamic-pages.js";
 import { buildPageRenderModel } from "../src/domain/page-render.js";
 
-const champion = (id, name, cost, traits) => ({ apiName: `DA_18_${id}`, name, cost, traits, squareIcon: `assets/${id}.tex` });
+const champion = (id, name, cost, traits, range = 1) => ({ apiName: `DA_18_${id}`, name, cost, traits, stats: { range }, squareIcon: `assets/${id}.tex` });
 const trait = (id, name, desc) => ({ apiName: `DA_18_${id}`, name, desc, effects: [{ minUnits: 2 }, { minUnits: 4 }], icon: `assets/${id}.tex` });
 const champions = [
-  champion("A", "英雄甲", 5, ["灵魂莲华", "法师"]), champion("B", "英雄乙", 4, ["灵魂莲华", "护卫"]),
-  champion("C", "英雄丙", 3, ["灵魂莲华", "射手"]), champion("D", "英雄丁", 2, ["永恒之森", "法师"]),
+  champion("A", "英雄甲", 5, ["灵魂莲华", "法师"], 4), champion("B", "英雄乙", 4, ["灵魂莲华", "护卫"], 1),
+  champion("C", "英雄丙", 3, ["灵魂莲华", "射手"], 3), champion("D", "英雄丁", 2, ["永恒之森", "法师"], 2),
   champion("E", "英雄戊", 4, ["永恒之森", "护卫"]), champion("F", "英雄己", 1, ["永恒之森", "射手"]),
   champion("G", "英雄庚", 5, ["花仙子", "法师"]), champion("H", "英雄辛", 3, ["花仙子", "护卫"]),
   champion("I", "英雄壬", 2, ["花仙子", "射手"]),
@@ -36,7 +36,7 @@ test("指定羁绊时优先生成该真实羁绊和成员解析", () => {
 });
 
 test("实时题目的官方素材会进入第四步页面并被预览模型保留", () => {
-  const topic = buildGameResearch("新赛季阵容推荐", bundle).topics[0];
+  const topic = buildGameResearch("灵魂莲华阵容推荐", bundle).topics[0];
   const outline = { pages: Array.from({ length: 7 }, (_, index) => ({
     pageNo: index + 1,
     role: index === 0 ? "cover" : index === 6 ? "summary" : "detail",
@@ -47,9 +47,17 @@ test("实时题目的官方素材会进入第四步页面并被预览模型保�
     factIds: ["fact-current-set"],
     assetNeeds: ["当前赛季官方素材"],
   })) };
-  const project = materializeDynamicProject({ topic, outline, viewpointId: "view-1", research: { viewpoints: [{ id: "view-1", title: "真实阵容" }] } });
-  assert.ok(project.pages.filter((page) => page.visual).length >= 4);
+  const enriched = enrichOutlineWithGameData(outline, topic);
+  assert.equal(enriched.pages[1].layoutStyle, "roster");
+  assert.equal(enriched.pages[3].layoutStyle, "board");
+  assert.match(enriched.pages[1].title, /有哪些英雄/);
+  const project = materializeDynamicProject({ topic, outline: enriched, viewpointId: "view-1", research: { viewpoints: [{ id: "view-1", title: "真实阵容" }] } });
+  assert.equal(project.pages[1].layoutStyle, "roster");
+  assert.equal(project.pages[3].layoutStyle, "board");
   const model = buildPageRenderModel(project.pages[0], "铲友研究所", 7);
-  assert.equal(model.visual.kind, "official");
-  assert.match(model.visual.source, /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//);
+  assert.equal(model.heroEntities.length, 3);
+  assert.ok(model.heroEntities.every((item) => item.imageUrl.startsWith("https://ddragon.leagueoflegends.com/")));
+  const boardModel = buildPageRenderModel(project.pages[3], "铲友研究所", 7);
+  assert.equal(boardModel.layoutStyle, "board");
+  assert.deepEqual(boardModel.items.map((item) => item.position), ["back", "front", "back"]);
 });

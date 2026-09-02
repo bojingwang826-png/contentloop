@@ -209,6 +209,12 @@ async function loadPageAssets(model, audit) {
     if (!source) throw new Error(`缺少页面配图：${model.visual.name}`);
     images.set(`illustration:${model.visual.name}`, await loadImage(source));
   }
+  const remoteSources = [...new Set([
+    ...(model.heroEntities || []).map((item) => item.imageUrl),
+    ...(model.items || []).map((item) => item.imageUrl),
+  ].filter(Boolean))];
+  const remoteImages = await Promise.all(remoteSources.map(async (source) => [source, await loadImage(source)]));
+  remoteImages.forEach(([source, image]) => images.set(`remote:${source}`, image));
   return images;
 }
 
@@ -221,9 +227,11 @@ function drawIcon(ctx, image, x, y, size, radius = 18) {
   ctx.restore();
 }
 
-function drawIllustration(ctx, image, x, y, width, height, radius = 28) {
+function drawIllustration(ctx, image, x, y, width, height, radius = 28, fit = "cover") {
   fillRounded(ctx, x, y, width, height, radius, colors.surface, "rgba(242,200,98,.28)");
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const scale = fit === "contain"
+    ? Math.min((width - 20) / image.naturalWidth, (height - 20) / image.naturalHeight)
+    : Math.max(width / image.naturalWidth, height / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   ctx.save();
@@ -236,6 +244,37 @@ function drawIllustration(ctx, image, x, y, width, height, radius = 28) {
   ctx.fillStyle = shade;
   ctx.fillRect(x, y, width, height);
   ctx.restore();
+}
+
+function drawHeroPortrait(ctx, images, entity, x, y, size, audit, label = "英雄") {
+  const image = images.get(`remote:${entity.imageUrl}`);
+  if (!image) {
+    recordTextOverflow(audit, `${label}头像`, 2, 1);
+    return;
+  }
+  drawIcon(ctx, image, x, y, size, Math.round(size * 0.2));
+}
+
+function drawHeroStrip(ctx, entities, images, x, y, width, height, audit) {
+  const list = entities.slice(0, 7);
+  const rows = list.length > 4 ? [list.slice(0, 4), list.slice(4)] : [list];
+  rows.forEach((row, rowIndex) => {
+    const portrait = 92;
+    const gap = 24;
+    const rowWidth = (row.length * portrait) + (Math.max(0, row.length - 1) * gap);
+    const startX = x + ((width - rowWidth) / 2);
+    const rowY = y + 18 + (rowIndex * 152);
+    row.forEach((entity, index) => {
+      const px = startX + (index * (portrait + gap));
+      drawHeroPortrait(ctx, images, entity, px, rowY, portrait, audit);
+      ctx.fillStyle = colors.text;
+      ctx.textAlign = "center";
+      drawFittedText(ctx, entity.name, px + (portrait / 2), rowY + 116, portrait + 16, 30, {
+        preferredSize: 19, minSize: 15, weight: 700, lineFactor: 1.15, maxLines: 1,
+      }, audit, `${entity.name}名称`);
+      ctx.textAlign = "left";
+    });
+  });
 }
 
 function drawBackground(ctx, model) {
@@ -372,8 +411,10 @@ function drawCover(ctx, model, images, audit) {
   drawTitle(ctx, model, false, audit);
   const cardY = 565;
   fillRounded(ctx, 64, cardY, 952, 375, 36, "rgba(38,24,63,.74)", "rgba(242,200,98,.28)");
-  if (model.visual) {
-    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 82, cardY + 18, 916, 339, 26);
+  if (model.heroEntities?.length) {
+    drawHeroStrip(ctx, model.heroEntities, images, 82, cardY + 18, 916, 339, audit);
+  } else if (model.visual) {
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 82, cardY + 18, 916, 339, 26, model.visual.kind === "official" ? "contain" : "cover");
   } else {
     const size = 136;
     model.heroIcons.forEach((name, index) => {
@@ -585,9 +626,12 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
     const ultra = density === "ultra";
     const padding = ultra ? 16 : dense ? 18 : 24;
     const markerSize = ultra ? 50 : dense ? 56 : 70;
-    const markerRadius = item.iconName ? Math.round(markerSize * 0.24) : markerSize / 2;
+    const itemImage = item.imageUrl ? images.get(`remote:${item.imageUrl}`) : null;
+    const markerRadius = item.iconName || itemImage ? Math.round(markerSize * 0.24) : markerSize / 2;
     fillRounded(ctx, x, y, width, height, 28, "rgba(38,24,63,.90)", "rgba(242,200,98,.20)");
-    if (item.iconName && images.get(item.iconName)) {
+    if (itemImage) {
+      drawIcon(ctx, itemImage, x + padding, y + padding, markerSize, markerRadius);
+    } else if (item.iconName && images.get(item.iconName)) {
       drawIcon(ctx, images.get(item.iconName), x + padding, y + padding, markerSize, markerRadius);
     } else {
       fillRounded(ctx, x + padding, y + padding, markerSize, markerSize, markerSize / 2, "rgba(242,200,98,.16)", "rgba(242,200,98,.40)");
@@ -644,7 +688,91 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
     }
 }
 
+function drawRosterCard(ctx, item, images, x, y, width, height, audit, index) {
+  fillRounded(ctx, x, y, width, height, 25, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
+  drawHeroPortrait(ctx, images, item, x + 22, y + 22, 92, audit);
+  ctx.fillStyle = colors.text;
+  drawFittedText(ctx, item.name, x + 134, y + 52, width - 158, 46, {
+    preferredSize: 28, minSize: 21, weight: 800, lineFactor: 1.15, maxLines: 1,
+  }, audit, `成员 ${index + 1} 名称`);
+  ctx.fillStyle = colors.accent;
+  setFont(ctx, 20, 700);
+  ctx.fillText(`${item.cost || "?"}费 · ${item.positionLabel}`, x + 134, y + 89);
+  ctx.fillStyle = colors.muted;
+  drawFittedText(ctx, item.traits.join(" / ") || item.detail, x + 22, y + 137, width - 44, height - 151, {
+    preferredSize: 20, minSize: 17, weight: 500, lineFactor: 1.25, maxLines: 2,
+  }, audit, `成员 ${index + 1} 羁绊`);
+}
+
+function drawRoster(ctx, model, images, audit) {
+  const bodyTop = drawTitle(ctx, model, true, audit) + 18;
+  const count = Math.min(7, model.items.length);
+  const rows = Math.ceil(count / 2);
+  const gap = 16;
+  const cardHeight = Math.min(218, Math.floor((1318 - bodyTop - ((rows - 1) * gap)) / rows));
+  const width = 467;
+  model.items.slice(0, count).forEach((item, index) => {
+    const isOddLast = count % 2 === 1 && index === count - 1;
+    const x = isOddLast ? 306.5 : 64 + ((index % 2) * (width + gap));
+    const y = bodyTop + (Math.floor(index / 2) * (cardHeight + gap));
+    drawRosterCard(ctx, item, images, x, y, width, cardHeight, audit, index);
+  });
+  audit.drawnBlocks = model.items.length;
+  audit.contentBottom = bodyTop + (rows * cardHeight) + (Math.max(0, rows - 1) * gap);
+}
+
+function boardColumns(count) {
+  const start = Math.floor((7 - count) / 2);
+  return Array.from({ length: count }, (_, index) => start + index);
+}
+
+function drawBoard(ctx, model, images, audit) {
+  const bodyTop = drawTitle(ctx, model, true, audit) + 18;
+  const panelHeight = 620;
+  fillRounded(ctx, 64, bodyTop, 952, panelHeight, 34, "rgba(23,15,48,.84)", "rgba(242,200,98,.30)");
+  const rows = [
+    { key: "back", label: "后排输出", y: bodyTop + 84 },
+    { key: "flex", label: "灵活位", y: bodyTop + 263 },
+    { key: "front", label: "前排承伤", y: bodyTop + 442 },
+  ];
+  rows.forEach((row) => {
+    ctx.fillStyle = colors.accent;
+    setFont(ctx, 19, 700);
+    ctx.fillText(row.label, 84, row.y + 49);
+    const members = model.items.filter((item) => item.position === row.key).slice(0, 7);
+    const columns = boardColumns(members.length);
+    members.forEach((item, index) => {
+      const px = 200 + (columns[index] * 105);
+      fillRounded(ctx, px - 5, row.y - 5, 90, 108, 20, "rgba(242,200,98,.08)", "rgba(242,200,98,.18)");
+      drawHeroPortrait(ctx, images, item, px + 4, row.y + 2, 72, audit);
+      ctx.fillStyle = colors.text;
+      ctx.textAlign = "center";
+      setFont(ctx, 15, 700);
+      ctx.fillText(item.name.slice(0, 5), px + 40, row.y + 96);
+      ctx.textAlign = "left";
+    });
+    ctx.strokeStyle = "rgba(242,200,98,.12)";
+    ctx.beginPath();
+    ctx.moveTo(184, row.y + 116);
+    ctx.lineTo(986, row.y + 116);
+    ctx.stroke();
+  });
+  const tipY = bodyTop + panelHeight + 18;
+  fillRounded(ctx, 64, tipY, 952, 146, 24, "rgba(242,200,98,.12)", "rgba(242,200,98,.28)");
+  ctx.fillStyle = colors.accent;
+  setFont(ctx, 24, 800);
+  ctx.fillText("实战调整", 90, tipY + 45);
+  ctx.fillStyle = colors.muted;
+  drawFittedText(ctx, "这是一套按射程与职责生成的基础站位。遇到切后排、范围伤害或同侧集火时，优先给主输出换边，再调整前排保护关系。", 90, tipY + 80, 884, 40, {
+    preferredSize: 20, minSize: 17, weight: 500, lineFactor: 1.25, maxLines: 2,
+  }, audit, "站位实战调整");
+  audit.drawnBlocks = model.items.length;
+  audit.contentBottom = tipY + 146;
+}
+
 function drawRule(ctx, model, images, audit) {
+  if (model.layoutStyle === "roster") return drawRoster(ctx, model, images, audit);
+  if (model.layoutStyle === "board") return drawBoard(ctx, model, images, audit);
   const density = model.contentDensity || getRulePageDensity(model);
   let bodyTop = drawTitle(ctx, model, true, audit) + 18;
   if (model.visual) {
@@ -653,7 +781,7 @@ function drawRule(ctx, model, images, audit) {
       : density === "dense"
         ? 190
         : bodyTop > 410 ? 188 : 220;
-    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, illustrationHeight, 28);
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, illustrationHeight, 28, model.visual.kind === "official" ? "contain" : "cover");
     bodyTop += illustrationHeight + 18;
   }
   const width = 467;

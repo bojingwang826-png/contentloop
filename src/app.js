@@ -38,7 +38,7 @@ import {
   pageExportFilename,
 } from "./domain/page-render.js";
 import { renderPageToCanvas, renderPageToPngWithAudit } from "./domain/canvas-renderer.js";
-import { materializeDynamicProject } from "./domain/dynamic-pages.js";
+import { enrichOutlineWithGameData, materializeDynamicProject } from "./domain/dynamic-pages.js";
 import { createZipBlob } from "./domain/zip.js";
 import {
   applyRewriteFieldsResponse,
@@ -1140,11 +1140,12 @@ function renderEditor() {
   const usesOfficialAssets = currentModel.type === "tree"
     || currentModel.type === "equipment"
     || currentModel.heroIcons?.length
-    || currentModel.items.some((item) => item?.iconName);
+    || currentModel.heroEntities?.length
+    || currentModel.items.some((item) => item?.iconName || item?.imageUrl);
   const visualStatus = currentModel.visual
     ? { label: `配图：${currentModel.visual.label}`, detail: currentModel.visual.reason, tone: "success" }
     : usesOfficialAssets
-      ? { label: "官方素材＋文字", detail: "本页内容需要装备信息，使用清晰官方图标辅助说明。", tone: "success" }
+      ? { label: "官方素材＋文字", detail: currentModel.contentKind === "equipment" ? "本页使用清晰官方装备图标辅助说明。" : "本页使用当前赛季英雄头像，并按主题组织名单或站位。", tone: "success" }
       : { label: "本页以文字为主", detail: "文字已经能完整表达信息，因此不强行添加配图。", tone: "neutral" };
   const preservedCount = normalizePreservedFields(current).length;
   const rewriteDisabled = current.locked || !state.rewriteSuggestion.trim() || state.aiBusy;
@@ -1823,7 +1824,7 @@ async function buildDynamicOutlineWithAi() {
     checkpoint(`生成动态七页大纲前 · ${custom.topic.title}`);
     state.customProject = {
       ...custom,
-      outline: response.result,
+      outline: enrichOutlineWithGameData(response.result, custom.topic),
       outlineConfirmed: false,
       outlineProvider: response.provider,
     };

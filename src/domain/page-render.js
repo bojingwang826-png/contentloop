@@ -95,6 +95,23 @@ function normalizeVisual(visual) {
   };
 }
 
+function normalizeEntity(item, index) {
+  const imageUrl = String(item?.imageUrl || "");
+  const trustedImage = /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//i.test(imageUrl);
+  return {
+    number: index + 1,
+    name: String(item?.name || `英雄 ${index + 1}`),
+    detail: String(item?.detail || ""),
+    example: String(item?.example || ""),
+    iconName: String(item?.iconName || ""),
+    imageUrl: trustedImage ? imageUrl : "",
+    cost: Math.max(0, Number(item?.cost || 0)),
+    traits: Array.isArray(item?.traits) ? item.traits.map(String).filter(Boolean) : [],
+    position: ["front", "back", "flex"].includes(item?.position) ? item.position : "flex",
+    positionLabel: String(item?.positionLabel || "灵活位"),
+  };
+}
+
 export function parseRecipe(value) {
   const recipe = String(value || "").trim();
   const [ingredientsText = "", resultName = ""] = recipe.split(/[＝=]/).map((part) => part.trim());
@@ -112,13 +129,7 @@ function normalizeStep(item, index) {
       iconName: "",
     };
   }
-  return {
-    number: index + 1,
-    name: String(item?.name || `第 ${index + 1} 步`),
-    detail: String(item?.detail || "按当前阵容逐项判断。"),
-    example: String(item?.example || ""),
-    iconName: String(item?.iconName || ""),
-  };
+  return normalizeEntity({ ...item, detail: item?.detail || "按当前阵容逐项判断。" }, index);
 }
 
 export function buildPageRenderModel(page, accountName = "", totalPages = 7) {
@@ -134,7 +145,9 @@ export function buildPageRenderModel(page, accountName = "", totalPages = 7) {
     accountName: String(accountName || "账号名"),
     seriesName: "铲友装备课01",
     contentKind: String(page?.contentKind || "equipment"),
+    layoutStyle: String(page?.layoutStyle || "cards"),
     visual: normalizeVisual(page?.visual),
+    heroEntities: (page?.featuredEntities || []).map(normalizeEntity).filter((item) => item.imageUrl),
     items: [],
   };
 
