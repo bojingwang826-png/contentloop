@@ -65,4 +65,12 @@ test("实时题目的官方素材会进入第四步页面并被预览模型保�
   assert.equal(closingModel.layoutStyle, "checklist");
   assert.equal(closingModel.heroEntities.length, 3);
   assert.deepEqual(closingModel.heroEntities.map((item) => item.imageUrl), model.heroEntities.map((item) => item.imageUrl));
+  const generatedItems = project.pages.slice(1).flatMap((page) => page.blocks[0]?.items || []).filter((item) => typeof item === "object");
+  const generatedCopy = generatedItems.flatMap((item) => [item.detail, item.example]).filter(Boolean);
+  assert.equal(new Set(generatedCopy).size, generatedCopy.length);
+  assert.ok(generatedCopy.every((text) => !text.includes("再结合当前来牌、装备和对手站位复核")));
+  assert.ok(generatedCopy.every((text) => !text.includes("读完就能知道下一步怎么做")));
+  const transitionCopy = project.pages[4].blocks[0].items.map((item) => item.detail).join(" ");
+  assert.match(transitionCopy, /前期|中期|后期/);
+  assert.match(transitionCopy, /两星|羁绊|高费核心/);
 });

@@ -244,19 +244,120 @@ function shortName(value, index) {
   return text.slice(0, 12) || `判断要点 ${index + 1}`;
 }
 
-function boundedDetail(value) {
-  let text = String(value || "").replace(/。{2,}/gu, "。").slice(0, 148).replace(/[，、；：]$/u, "");
-  if (text.length < 58) text = `${text.replace(/[。]$/u, "")}，再结合当前来牌、装备和对手站位复核，读完就能知道下一步怎么做`;
-  return `${text.replace(/[。]$/u, "")}。`;
+function boundedDetail(value, maxLength = 142) {
+  const clean = String(value || "")
+    .replace(/。{2,}/gu, "。")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (clean.length <= maxLength) return sentence(clean);
+  const clipped = clean.slice(0, maxLength);
+  const breakAt = Math.max(clipped.lastIndexOf("。"), clipped.lastIndexOf("；"));
+  const safe = breakAt >= Math.floor(maxLength * 0.58) ? clipped.slice(0, breakAt + 1) : `${clipped.slice(0, maxLength - 1).replace(/[，、；：。]$/u, "")}…`;
+  return safe;
+}
+
+function pointParts(point) {
+  const raw = String(point || "").trim();
+  const separator = raw.search(/[：:]/u);
+  if (separator < 0) return { label: raw, value: "" };
+  return { label: raw.slice(0, separator).trim(), value: raw.slice(separator + 1).trim() };
+}
+
+function quotedSubject(value, fallback) {
+  const subject = String(value || fallback || "这一项").replace(/[。！？；]+$/u, "").trim();
+  return subject.length > 30 ? subject.slice(0, 30) : subject;
+}
+
+function specificStepCopy(page, point, index, kind) {
+  const { label, value } = pointParts(point);
+  const subject = quotedSubject(value, label);
+  const pageFocus = quotedSubject(page.title, `第 ${page.pageNo} 页`);
+  const signal = String(point || "");
+  const copy = (detail, example) => ({ detail: boundedDetail(detail), example: boundedDetail(example, 76) });
+
+  if (/(前期|开局|低费|可留)/u.test(signal)) return copy(
+    value
+      ? `前期可以先留${subject}把场面撑住，谁先两星就先上，能打工的装备也不用一直捏在手里。等关键牌真正到场后再逐张替换，别为了等“标准答案”把能赢的质量先拆掉。`
+      : `开局先把场面质量稳住，谁先两星就先用谁，能打工的装备也不用一直捏着。等关键牌真正到场后再逐张替换，别为了“${subject}”把眼前能赢的牌先拆掉。`,
+    `看${subject}时别急着换：低费两星能稳血，就比一张没装备、没羁绊的一星高费牌更实在。`,
+  );
+  if (/(中期|衔接|过渡)/u.test(signal)) return copy(
+    value
+      ? `中期可以用${subject}接住节奏，先看它上场后能不能补羁绊、接装备或提高前排质量。换完场面没有明显变强，就先别为了一张阵容表硬换。`
+      : `中期要不要提速，先看“${subject}”能不能带来真实提升：补出两星、接上关键羁绊，或者让前排多站一轮。三样都做不到，就先守住经济。`,
+    `处理${subject}时，每换一张牌都问一句：羁绊断没断、主坦变没变脆、输出有没有更早启动？`,
+  );
+  if (/(后期|终点|高费|成型|补上限)/u.test(signal)) return copy(
+    value
+      ? `${subject}是后期要留资源找的核心，但拿到后也别一键全换。先确认前排能不能多扛一轮、装备是否匹配；如果上场反而让关键羁绊断掉，宁可晚一回合再换。`
+      : `到了后期再处理“${subject}”。高费核心来了也别一键全换，先确认前排能不能多扛一轮、装备是否匹配；上场反而让关键羁绊断掉，就宁可晚一回合。`,
+    `${subject}到场后按这个顺序检查：先保住主坦和主输出，再用剩余人口补控制、减抗或第二输出点。`,
+  );
+  if (/(前排|承伤|坦度|补血|生存)/u.test(signal)) return copy(
+    `处理${subject}时，不是把最肉的牌顶在第一排就结束。先看对面主要伤害从哪边来，再让主坦接第一波火力，副坦负责挡切入或控制，这样后排才有完整输出时间。`,
+    `如果${subject}还是秒倒，先换承伤位置和装备分配，别第一反应就是把所有钱都拿去搜牌。`,
+  );
+  if (/(后排|输出|主\s*C|启动|回蓝|攻速)/u.test(signal)) return copy(
+    `安排${subject}时，要同时看输出环境和启动速度。把主 C 放到能安全打出第一轮技能的位置，装备先补最缺的启动或穿透，再考虑继续堆面板，通常比三件纯伤害更稳。`,
+    `检查${subject}时，先看主 C 是“没放出技能”还是“放了但打不动”，两个问题的补法完全不一样。`,
+  );
+  if (/(灵活|功能位|控制|辅助|团队收益)/u.test(signal)) return copy(
+    `轮到${subject}时，优先补当前最明显的缺口：缺控制就补控制，前排站不住就补保护，伤害够但收不掉残血再考虑副 C。这个位置可以跟着对手变化。`,
+    `安排${subject}时别照榜单填，先看这局最难处理的是前排、后排还是控制链。`,
+  );
+  if (/(来牌|核心牌|对子|追星)/u.test(signal)) return copy(
+    `在“${pageFocus}”这页里，判断${subject}要看数量和质量，不是商店里露过一次就算胡。手里已有对子、同费卡不拥挤，而且打工阵容还能顶住时才值得继续；连续几轮没进展就留条退路。`,
+    `决定${subject}前先数手里的对子和同行，再考虑继续搜，还是把钱留给下一次升级。`,
+  );
+  if (/(装备|散件|神装|物理|法术|破甲|减抗)/u.test(signal)) return copy(
+    `判断${subject}时先看功能：这局到底缺启动、持续伤害、穿透还是保命。散件能解决眼前战力就可以先合，等神装却连续掉血，往往比少一点理论上限更亏。`,
+    `围绕${subject}配装时别只看推荐栏前三件，先看主 C 能不能启动、前排能不能撑到技能放出来。`,
+  );
+  if (/(经济|金币|利息|升级|搜牌|花钱|血量)/u.test(signal)) return copy(
+    `决定${subject}时，把血量、场面和金币放在一起看。还能稳定赢就留经济准备升级；已经连续大掉血，就把钱花在最容易两星或补齐关键羁绊的地方，搜到能止血就先停。`,
+    `处理${subject}时别定“必须搜到谁”，改成“这轮至少补强哪一排”，更容易知道什么时候停手。`,
+  );
+  if (/(站位|侦查|换边|对手|集火|切后)/u.test(signal)) return copy(
+    `调整${subject}前，最好每回合都看一眼对手。主 C 避开第一波控制和切入，主坦对准核心火力；如果几家威胁方向不同，就优先防下一轮最可能遇到、也最容易让你掉大血的那家。`,
+    `调整${subject}时有个小习惯很好用：最后几秒只动一两张关键牌，别整队乱换把保护关系拆散。`,
+  );
+  if (/(同行|换线|转阵|撤|替代|平替|保留.*空间)/u.test(signal)) return copy(
+    `看到${subject}这个信号，就别再死磕。优先保留能继承现有装备的输出位和已经两星的前排，再找共享羁绊的替代牌，慢慢换线比突然卖空整队更容易稳住血量。`,
+    `准备处理${subject}前先留三样：能接装备的人、能顶住的前排，以及下一套阵容的关键连接牌。`,
+  );
+  if (/(羁绊|档位|开启|成员)/u.test(signal)) return copy(
+    `在“${pageFocus}”这页里，判断${subject}值不值得开，别只追最高层数。先看多一档换来了什么、又牺牲了哪个功能位；只是数字好看却让阵容失去控制，就没必要硬凑。`,
+    `为了${subject}凑羁绊前，把要下掉的棋子也算进去；少了控制或主坦，面板变高不一定更能打。`,
+  );
+  if (/(版本|来源|核验|公告|改动)/u.test(signal)) return copy(
+    `${subject}要把确定信息和玩家体感分开。公告里的改动可以直接说明，强度判断则要结合当前赛季、发布时间和多场对局反馈，别把一两局顺风写成人人可复制的结论。`,
+    `写${subject}前再看一眼版本号和更新时间，旧赛季截图最容易把读者带偏。`,
+  );
+
+  const detailFallbacks = {
+    problem: `“${pageFocus}”里碰到${subject}先别急着套答案，把当时的来牌、装备和血量记下来。很多时候不是阵容不能玩，而是动手太早，或者把两个不同的问题混在了一起。`,
+    framework: `“${pageFocus}”里的${subject}可以按条件、目标、代价三步走：先确认手里有什么，再决定这回合最想解决什么，最后比较哪种做法最不伤经济和场面。`,
+    detail: `在“${pageFocus}”这页，${subject}真正有用的地方是能直接影响这一回合的选择。先看它解决什么，再对照手里资源；条件不够就换个更容易兑现的方案，不用为了攻略截图强行照搬。`,
+    mistake: `说到“${pageFocus}”，${subject}看起来省事，其实最容易把节奏带偏。只要来牌、装备或对手有一项不一样，原来的结论就可能失效，最好给自己留个能随时掉头的备选。`,
+    summary: `复盘“${pageFocus}”时，把${subject}记成三个问题就够了：现在最缺什么、这回合能解决什么、做完还剩多少调整空间。能答出来，基本就不会乱操作。`,
+  };
+  const exampleFallbacks = [
+    `${subject}就当朋友给的攻略参考，先照顾这局真实拿到的牌，不必追求一模一样。`,
+    `${subject}有两个方案都说得通时，优先选现在更容易做成、失败后也更好退的那个。`,
+    `做完${subject}先看一轮战斗，哪里没改善，下一轮就只改那个位置。`,
+    `收藏${subject}时记方法，进游戏看条件；换个版本也不至于整条思路都失效。`,
+  ];
+  return copy(detailFallbacks[page.role] || detailFallbacks.detail, exampleFallbacks[index % exampleFallbacks.length]);
 }
 
 function materializeStep(page, point, index, kind) {
   const icons = kind === "equipment" ? pageIcons[page.pageNo] : null;
   const iconName = icons?.[index % icons.length] || "";
+  const copy = specificStepCopy(page, point, index, kind);
   return {
     name: shortName(point, index),
-    detail: boundedDetail(`${sentence(point)}${(roleDetail[page.role] || roleDetail.detail)[index % 4]}`),
-    example: (roleCue[page.role] || roleCue.detail)[index % 4],
+    detail: copy.detail,
+    example: copy.example,
     iconName,
   };
 }
@@ -363,12 +464,24 @@ export function enrichOutlineWithGameData(outline, topic) {
 function materializeEntity(entity, index, layoutStyle) {
   const traits = (entity.traits || []).join(" / ");
   const positionText = entity.positionLabel || "灵活位";
+  const identity = `${entity.name}是${entity.cost || "?"}费${positionText}`;
+  const roleDetailByPosition = {
+    front: `${identity}，主要任务是接住第一波伤害并给后排争取启动时间。看它时重点不是单卡名气，而是能否和现有前排连成一条稳定承伤线。`,
+    back: `${identity}，更需要安全输出位和完整启动条件。上场前先看装备能否匹配、第一轮技能会不会被打断，再决定要不要把资源集中给它。`,
+    flex: `${identity}，可以根据对手和来牌补输出、控制或保护。这个格子不用锁死，哪张牌能解决当前最明显的缺口，就先让谁上场。`,
+  };
+  const entityTips = [
+    `拿到${entity.name}时，顺手检查同费卡拥挤度，别为了追一张牌把经济搜空。`,
+    `${entity.name}上场后先看一轮实战：前排时间、启动速度和目标选择，至少要改善一项。`,
+    `如果${entity.name}暂时没来，先用能继承它装备或补同类羁绊的棋子过渡。`,
+    `${entity.name}的位置不是固定答案，对面主 C 换边或有切入时，记得同步调整保护关系。`,
+  ];
   return {
     name: entity.name,
     detail: layoutStyle === "board"
       ? `${positionText} · ${traits || "根据阵容职责调整"}`
-      : `${entity.cost || "?"}费，拥有${traits || "当前赛季"}羁绊。基础职责是${positionText}；组阵时还要核对费用曲线、技能射程和相邻队友，不能只按英雄名照抄。`,
-    example: layoutStyle === "board" ? `${positionText}，实战按对手换边` : `${positionText} · 先确认来牌与费用再决定是否追星`,
+      : `${roleDetailByPosition[entity.position] || roleDetailByPosition.flex}${traits ? ` 它关联${traits}羁绊，换人时记得一起检查层数有没有断。` : ""}`,
+    example: layoutStyle === "board" ? `${entity.name}站${positionText}，实战按对手换边` : entityTips[index % entityTips.length],
     imageUrl: entity.imageUrl || "",
     cost: entity.cost || 0,
     traits: entity.traits || [],
@@ -401,7 +514,7 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     featuredEntities: entities,
     contentKind: kind,
     layoutStyle: page.layoutStyle || "cards",
-    layoutVersion: 3,
+    layoutVersion: 4,
   };
   if (page.pageNo === 1) {
     return {
@@ -441,6 +554,33 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     type: "rule",
     blocks: [{ kind: "steps", items: points.map((point, index) => materializeStep(page, point, index, kind)) }],
   };
+}
+
+function ensureProjectCopyIsDistinct(pages) {
+  const seen = new Set();
+  return pages.map((page) => ({
+    ...page,
+    blocks: (page.blocks || []).map((block) => ({
+      ...block,
+      items: (block.items || []).map((item) => {
+        if (!item || typeof item !== "object") return item;
+        const next = { ...item };
+        for (const property of ["detail", "example", "cue"]) {
+          if (!next[property]) continue;
+          const fingerprint = String(next[property]).replace(/\s+/gu, "").trim();
+          if (!seen.has(fingerprint)) {
+            seen.add(fingerprint);
+            continue;
+          }
+          const focus = quotedSubject(page.title, page.kicker);
+          const prefix = property === "detail" ? `说到“${focus}”，` : `这页聊“${focus}”时，`;
+          next[property] = boundedDetail(`${prefix}${next[property]}`, property === "detail" ? 142 : 82);
+          seen.add(String(next[property]).replace(/\s+/gu, "").trim());
+        }
+        return next;
+      }),
+    })),
+  }));
 }
 
 function buildExportCopy(topic, viewpoint) {
@@ -487,7 +627,9 @@ export function materializeDynamicProject(customProject) {
   const outline = enrichOutlineWithGameData(customProject.outline, customProject.topic);
   const kind = topicKind(customProject.topic);
   const visualPlan = planPageVisuals(outline.pages, customProject.topic, kind);
-  const pages = outline.pages.map((page) => outlinePageToEditorPage(page, customProject.topic, visualPlan));
+  const pages = ensureProjectCopyIsDistinct(
+    outline.pages.map((page) => outlinePageToEditorPage(page, customProject.topic, visualPlan)),
+  );
   const iconNames = pages.flatMap((page) => page.blocks[0]?.items || []).flatMap((item) => (
     typeof item === "object" && item.iconName ? [item.iconName] : []
   ));

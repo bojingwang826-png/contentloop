@@ -506,7 +506,7 @@ test("过短的规则页说明会自动补足信息密度并统一实战提示",
   const items = repaired.blocks[0].items;
 
   assert.ok(items.every((item) => item.detail.length >= 48));
-  assert.ok(items.every((item) => item.example.startsWith("实战检查：")));
+  assert.ok(items.every((item) => /^(实战检查|实战里|一个小提醒|对局里|如果拿不准|别急|小提醒)/u.test(item.example)));
   assert.ok(items.every((item) => item.example.length >= 28));
   assert.equal(new Set(items.map((item) => item.detail)).size, items.length);
 });

@@ -165,7 +165,7 @@ window.addEventListener("beforeunload", clearExportArtifacts);
 function upgradeDynamicPageLayout(stored) {
   const storedPages = Array.isArray(stored?.pages) ? stored.pages : [];
   if (stored?.contentSource !== "dynamic" || !stored.customProject?.outline) return storedPages;
-  if (storedPages.length === 7 && storedPages.every((page) => page.layoutVersion >= 3)) return storedPages;
+  if (storedPages.length === 7 && storedPages.every((page) => page.layoutVersion >= 4)) return storedPages;
   try {
     const fresh = materializeDynamicProject(stored.customProject).pages;
     return fresh.map((freshPage, index) => {

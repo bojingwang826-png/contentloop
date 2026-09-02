@@ -391,7 +391,10 @@ function ensureReadableItems(items, kind) {
       if (known.example !== profile.example) example = example.replace(known.example, "").trim();
     }
     if (copyLength(detail) < 48) detail = appendOnce(detail, profile.detail);
-    if (!example.startsWith("实战检查：")) example = `实战检查：${example}`;
+    const friendlyLeads = ["实战里可以这样看：", "一个小提醒：", "对局里多看一眼：", "如果拿不准："];
+    if (!/^(实战检查|实战里|一个小提醒|对局里|如果拿不准|别急|小提醒)/u.test(example)) {
+      example = `${friendlyLeads[index % friendlyLeads.length]}${example}`;
+    }
     if (copyLength(example) < 28) example = appendOnce(example, profile.example);
     return { ...item, detail, example };
   });
