@@ -156,6 +156,37 @@ test("不同文字输入会生成不同且贴合主题的候选选题", () => {
   assert.ok(hero.topics.every((topic) => topic.title.includes("王者荣耀新英雄苍")));
 });
 
+test("新赛季阵容、强化符文和运营问题会进入不同主题链", () => {
+  const lineup = analyzeInputDemo("我想做新赛季阵容推荐");
+  const augment = analyzeInputDemo("强化符文怎么选");
+  const economy = analyzeInputDemo("什么时候升级搜牌，怎么控制经济");
+  assert.match(lineup.intent, /阵容推荐/);
+  assert.ok(lineup.topics.every((topic) => topic.id.startsWith("candidate-lineup-")));
+  assert.match(augment.intent, /强化符文/);
+  assert.ok(augment.topics.every((topic) => topic.id.startsWith("candidate-augment-")));
+  assert.match(economy.intent, /运营与经济/);
+  assert.ok(economy.topics.every((topic) => topic.id.startsWith("candidate-economy-")));
+  assert.notDeepEqual(lineup.topics.map((topic) => topic.title), augment.topics.map((topic) => topic.title));
+});
+
+test("冷门自定义金铲铲问题仍会保留用户主题而不是退回固定选题", () => {
+  const analysis = analyzeInputDemo("如何判断什么时候追三星五费");
+  assert.ok(analysis.topics.every((topic) => topic.title.includes("三星五费")));
+  assert.ok(analysis.topics.every((topic) => !topic.title.includes("4 个体验点")));
+});
+
+test("不同主题会生成与类型匹配且不重复的七页任务", () => {
+  for (const input of ["新赛季阵容推荐", "强化符文怎么选", "什么时候升级搜牌"]) {
+    const analysis = analyzeInputDemo(input);
+    const topic = analysis.topics[0];
+    const research = buildResearchBriefDemo(topic, analysis);
+    const outline = generateOutlineDemo(topic, research, research.recommendedViewpointId);
+    assert.equal(outline.pages.length, 7);
+    assert.equal(new Set(outline.pages.map((page) => page.title)).size, 7);
+    assert.ok(outline.pages.every((page) => page.keyPoints.length >= 2));
+  }
+});
+
 test("只有网址且正文未确认时不会返回固定候选", () => {
   const analysis = analyzeInputDemo("https://example.com/game-guide");
   assert.ok(analysis.topics.every((topic) => topic.pending));

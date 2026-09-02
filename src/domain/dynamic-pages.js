@@ -145,7 +145,7 @@ const illustrationThemes = {
 };
 
 function topicKind(topic) {
-  const idKind = String(topic?.id || "").match(/^candidate-(equipment|lineup|experience)-/)?.[1];
+  const idKind = String(topic?.id || "").match(/^candidate-(equipment|lineup|version|performance|comments|augment|mechanic|trait|positioning|economy|hero|experience)-/)?.[1];
   if (idKind) return idKind;
   const text = `${topic?.title || ""} ${topic?.angle || ""}`;
   if (/(阵容|主\s*C|来牌|运营|上分|站位)/u.test(text)) return "lineup";
@@ -197,7 +197,7 @@ function planPageVisuals(pages, topic, kind) {
     return planned;
   }
 
-  const coverTheme = kind === "lineup" ? "lineup" : "review";
+  const coverTheme = ({ lineup: "lineup", positioning: "lineup", economy: "economy", hero: "roles", trait: "branching", augment: "tradeoff", mechanic: "roadmap", version: "review" })[kind] || "review";
   const roleThemes = {
     problem: ["diagnosis", "pitfalls", "roadmap"],
     framework: ["roadmap", "branching", "diagnosis"],
@@ -230,12 +230,18 @@ function shortName(value, index) {
   return text.slice(0, 12) || `判断要点 ${index + 1}`;
 }
 
+function boundedDetail(value) {
+  let text = String(value || "").replace(/。{2,}/gu, "。").slice(0, 109).replace(/[，、；：]$/u, "");
+  if (text.length < 38) text = `${text.replace(/[。]$/u, "")}，方便对局中快速复核`;
+  return `${text.replace(/[。]$/u, "")}。`;
+}
+
 function materializeStep(page, point, index, kind) {
   const icons = kind === "equipment" ? pageIcons[page.pageNo] : null;
   const iconName = icons?.[index % icons.length] || "";
   return {
     name: shortName(point, index),
-    detail: `${sentence(point)}${(roleDetail[page.role] || roleDetail.detail)[index % 4]}`,
+    detail: boundedDetail(`${sentence(point)}${(roleDetail[page.role] || roleDetail.detail)[index % 4]}`),
     example: (roleCue[page.role] || roleCue.detail)[index % 4],
     iconName,
   };
@@ -302,6 +308,10 @@ function buildExportCopy(topic, viewpoint) {
   const kind = topicKind(topic);
   if (kind !== "equipment") {
     const isLineup = kind === "lineup";
+    const tagByKind = {
+      augment: "强化符文", mechanic: "赛季机制", trait: "羁绊攻略", positioning: "站位技巧",
+      economy: "运营思路", hero: "英雄攻略", version: "版本解读", comments: "玩家讨论", performance: "内容复盘",
+    };
     return {
       titles: [
         title,
@@ -313,7 +323,7 @@ function buildExportCopy(topic, viewpoint) {
         : `铲友们，${title}这件事，我按新手最容易卡住的顺序拆成 7 页了 🎮\n\n这篇先讲可迁移的判断方法：看清场景、找出关键条件，再决定当前最值得做的一步，不用照搬唯一答案。\n\n涉及具体版本结论和数据的部分，发布前仍需要核对来源和日期。建议先收藏，实际遇到类似情况时再回来对照一下 ✨\n\n你还想看哪个场景的详细拆解？评论区告诉我。`,
       tags: isLineup
         ? ["金铲铲之战", "阵容运营", "金铲铲新手", "游戏攻略", "铲友研究所"]
-        : ["金铲铲之战", "新手攻略", "游戏体验", "游戏攻略", "铲友研究所"],
+        : ["金铲铲之战", tagByKind[kind] || "新手攻略", "游戏攻略", "金铲铲攻略", "铲友研究所"],
     };
   }
   return {

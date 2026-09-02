@@ -404,7 +404,7 @@ function renderSourceGate(sources) {
 function renderSourceInsights(source) {
   if (source.extractionStatus !== "extracted") return "";
   const structured = source.structured || {};
-  const typeLabels = { equipment: "装备资料", lineup: "阵容攻略", patch: "版本更新", guide: "新手教程", general: "通用内容" };
+  const typeLabels = { equipment: "装备资料", lineup: "阵容攻略", augment: "强化符文", mechanic: "玩法机制", patch: "版本更新", guide: "新手教程", general: "通用内容" };
   const confidenceLabels = { high: "识别信息较完整", medium: "识别到部分信息", low: "只识别到基础正文" };
   const chips = [
     typeLabels[structured.contentType] || typeLabels.general,
@@ -538,8 +538,12 @@ function renderHome() {
         <label for="account-name">发布账号名</label>
         <input id="account-name" data-field="accountName" value="${escapeHtml(state.accountName)}" autocomplete="off" />
         <label for="source-input">粘贴链接、文案或灵感</label>
-        <textarea id="source-input" rows="4" data-field="sourceInput" placeholder="例如：我想做金铲铲新手装备教程；也可以粘贴一个公开网页链接">${escapeHtml(state.sourceInput)}</textarea>
-        <p class="helper-text">粘贴公开网页后会自动清理正文并提取游戏信息；识别结果经你确认后才用于候选选题和研究卡。读取失败时可手动补充。</p>
+        <textarea id="source-input" rows="4" data-field="sourceInput" placeholder="例如：我想做新赛季阵容推荐；也可以粘贴一个公开网页链接，让系统借鉴正文创作">${escapeHtml(state.sourceInput)}</textarea>
+        <div class="theme-suggestions" aria-label="金铲铲主题示例">
+          <span>试试这些主题</span>
+          ${["新赛季阵容推荐", "强化符文怎么选", "运营与搜牌节奏", "羁绊转职解析", "英雄主 C 攻略", "站位与对位技巧", "版本更新解读", "新手避坑指南"].map((item) => `<button type="button" data-action="use-theme-example" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}
+        </div>
+        <p class="helper-text">支持任意金铲铲相关主题。粘贴公开网页后会读取正文；确认识别结果后，候选选题、观点和七页内容都会围绕原文重新生成。</p>
         ${renderAiModeInline()}
         <button class="button primary full" type="button" data-action="analyze-source-input" ${state.aiBusy || !state.sourceInput.trim() ? "disabled" : ""} aria-busy="${state.aiBusy}">${icon("search")}${escapeHtml(inputActionLabel)}</button>
       </div>
@@ -554,7 +558,7 @@ function renderHome() {
     ${renderScreenshotOcr()}
     ${renderInputAnalysis()}
     <section class="section-block" aria-labelledby="topic-title">
-      <div class="section-title"><div><p class="eyebrow">今日值得做的 5 个选题</p><h2 id="topic-title">系统推荐顺序</h2></div><span class="sort-note">收藏价值权重最高</span></div>
+      <div class="section-title"><div><p class="eyebrow">没有输入时的样例选题</p><h2 id="topic-title">示例推荐顺序</h2></div><span class="sort-note">输入任意主题可替换</span></div>
       <div class="topic-grid">
         ${project.topics.map((topic, index) => `
           <button class="topic-card ${topic.id === state.selectedTopicId ? "is-selected" : ""}" type="button" data-action="select-topic" data-id="${topic.id}" aria-pressed="${topic.id === state.selectedTopicId}">
@@ -1891,6 +1895,14 @@ app.addEventListener("click", (event) => {
       return;
     }
     void analyzeSourceInputWithAi();
+  }
+  if (action === "use-theme-example") {
+    state.sourceInput = value || "";
+    state.inputAnalysis = null;
+    state.inputAnalysisError = "";
+    saveState();
+    render();
+    document.querySelector("#source-input")?.focus();
   }
   if (action === "clear-screenshot") clearScreenshotCapture();
   if (action === "confirm-screenshot") void confirmScreenshotCapture();

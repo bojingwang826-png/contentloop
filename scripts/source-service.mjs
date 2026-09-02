@@ -111,8 +111,12 @@ export function extractGameKnowledge(text, title = "") {
   const recipes = extractRecipes(content);
   const contentType = /(版本更新|更新公告|补丁|平衡调整)/.test(content)
     ? "patch"
-    : /(阵容|羁绊|站位|运营|来牌|上分|赌狗|T0)/.test(content)
-      ? "lineup"
+    : /(强化符文|海克斯|强化选择)/.test(content)
+      ? "augment"
+      : /(赛季机制|玩法机制|新机制)/.test(content)
+        ? "mechanic"
+        : /(阵容|羁绊|站位|运营|来牌|上分|赌狗|T0)/.test(content)
+          ? "lineup"
       : /(装备|合成|散件|成装)/.test(content)
         ? "equipment"
         : /(攻略|教程|新手|避坑)/.test(content)
@@ -120,7 +124,7 @@ export function extractGameKnowledge(text, title = "") {
           : "general";
   const game = /金铲铲/.test(content) ? "金铲铲之战" : /Teamfight Tactics|\bTFT\b/i.test(content) ? "Teamfight Tactics" : "";
   const version = detectVersion(content);
-  const keywordPool = ["装备合成", "装备分配", "替代装备", "版本更新", "新手攻略", "阵容运营", "站位", "羁绊", "主C", "前排", "回蓝", "攻速", "生存"];
+  const keywordPool = ["装备合成", "装备分配", "替代装备", "版本更新", "新手攻略", "阵容推荐", "阵容运营", "强化符文", "海克斯", "赛季机制", "搜牌", "升级", "站位", "对位", "羁绊", "转职", "主C", "三星", "前排", "回蓝", "攻速", "生存"];
   const keywords = uniqueMatches(content, keywordPool, 8);
   const lineupNames = text.split(/\r?\n/)
     .map((line) => compact(line, 40))

@@ -793,6 +793,39 @@ textarea:disabled {
   font-size: 13px;
 }
 
+.theme-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.theme-suggestions > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.theme-suggestions button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--canvas-soft);
+  cursor: pointer;
+}
+
+.theme-suggestions button:hover,
+.theme-suggestions button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  outline: none;
+}
+
 .button,
 .icon-button {
   display: inline-flex;
