@@ -1,0 +1,25 @@
+{
+  "name": "game-note-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "金铲铲小红书图文创作工具 Phase A 匿名样例",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node --test",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "@openai/sites-vite-plugin": "^0.2.0",
+    "vite": "^8.0.13",
+    "wrangler": "^4.92.0"
+  }
+}
