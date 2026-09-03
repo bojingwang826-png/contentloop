@@ -977,9 +977,27 @@ function drawBoard(ctx, model, images, audit) {
   audit.contentBottom = tipY + 146;
 }
 
+export function getSideRuleLayout(bodyTop, count) {
+  const safeCount = Math.max(1, Math.min(4, Number(count) || 1));
+  const gap = 14;
+  const panelHeight = Math.max(0, 1298 - bodyTop);
+  const cardHeight = Math.floor((panelHeight - ((safeCount - 1) * gap)) / safeCount);
+  return {
+    panelHeight,
+    gap,
+    cardHeight,
+    markerBottom: 72,
+    detailTop: 100,
+    detailHeight: Math.max(0, cardHeight - 108),
+    contentBottom: bodyTop + panelHeight,
+  };
+}
+
 function drawSideRule(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 20;
-  const panelHeight = Math.min(920, 1298 - bodyTop);
+  const count = Math.min(4, model.items.length);
+  const layout = getSideRuleLayout(bodyTop, count);
+  const { panelHeight, gap, cardHeight } = layout;
   const hasVisual = Boolean(model.visual);
   const visualWidth = hasVisual ? 340 : 0;
   if (hasVisual) {
@@ -987,9 +1005,6 @@ function drawSideRule(ctx, model, images, audit) {
   }
   const cardX = hasVisual ? 424 : 64;
   const cardWidth = hasVisual ? 592 : 952;
-  const gap = 14;
-  const count = Math.min(4, model.items.length);
-  const cardHeight = Math.floor((panelHeight - (Math.max(0, count - 1) * gap)) / Math.max(1, count));
   model.items.slice(0, count).forEach((item, index) => {
     const y = bodyTop + (index * (cardHeight + gap));
     fillRounded(ctx, cardX, y, cardWidth, cardHeight, 24, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
@@ -1004,12 +1019,12 @@ function drawSideRule(ctx, model, images, audit) {
       preferredSize: 26, minSize: 20, weight: 800, lineFactor: 1.18, maxLines: 2,
     }, audit, `侧栏步骤 ${index + 1} 标题`);
     ctx.fillStyle = colors.muted;
-    drawFittedText(ctx, item.detail, cardX + 24, y + 84, cardWidth - 48, cardHeight - 96, {
-      preferredSize: 22, minSize: 22, weight: 500, lineFactor: 1.32, maxLines: Infinity,
+    drawFittedText(ctx, item.detail, cardX + 24, y + layout.detailTop, cardWidth - 48, layout.detailHeight, {
+      preferredSize: 22, minSize: 22, weight: 500, lineFactor: 1.28, maxLines: Infinity,
     }, audit, `侧栏步骤 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
-  audit.contentBottom = bodyTop + panelHeight;
+  audit.contentBottom = layout.contentBottom;
 }
 
 function drawChecklist(ctx, model, images, audit) {

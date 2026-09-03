@@ -54,6 +54,7 @@ import {
   getEquipmentPageLayout,
   getRuleGridLayout,
   getRosterGridLayout,
+  getSideRuleLayout,
   getTitleTextLayout,
   splitText,
 } from "../src/domain/canvas-renderer.js";
@@ -413,6 +414,15 @@ test("成员较少时卡片会利用空白放大正文，成员较多时仍保�
   assert.ok(eight.cardHeight < four.cardHeight);
   assert.ok(four.contentBottom <= 1318);
   assert.ok(eight.contentBottom <= 1318);
+});
+
+test("侧栏步骤正文从编号图标下方开始且保持统一字号空间", () => {
+  const layout = getSideRuleLayout(330, 4);
+  const lineHeight = Math.ceil(22 * 1.28);
+
+  assert.ok(layout.detailTop - 22 > layout.markerBottom);
+  assert.ok(layout.detailHeight >= 4 * lineHeight);
+  assert.equal(layout.contentBottom, 1298);
 });
 
 test("导出质检可以识别文字截断并给出黄色提醒", () => {
