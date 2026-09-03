@@ -88,7 +88,16 @@ export function editableFieldsForPage(page) {
   return fields;
 }
 
-export function createRewriteFieldsRequest(page, suggestion, taskId = createTaskId("rewrite")) {
+export function createRewriteFieldsRequest(page, suggestion, taskId = createTaskId("rewrite"), intentContext = {}) {
+  const safeIntentContext = {
+    surface: intentContext.surface === "outline" ? "outline" : "editor",
+    currentTitle: String(intentContext.currentTitle || page?.title || "").trim().slice(0, 120),
+    originalTitle: String(intentContext.originalTitle || page?.title || "").trim().slice(0, 120),
+    titleWasEdited: Boolean(intentContext.titleWasEdited),
+    userEditedFields: Array.isArray(intentContext.userEditedFields)
+      ? intentContext.userEditedFields.filter((item) => ["kicker", "title", "subtitle", "keyPoints"].includes(item)).slice(0, 4)
+      : [],
+  };
   return {
     taskId,
     taskType: "rewrite_fields",
@@ -99,6 +108,12 @@ export function createRewriteFieldsRequest(page, suggestion, taskId = createTask
       suggestion: String(suggestion || "").trim(),
       fields: editableFieldsForPage(page),
       page: structuredClone(page),
+      intentContext: safeIntentContext,
+      instructionPriority: [
+        "用户刚刚手动修改的标题与字段，是本次创作方向，不得还原成旧主题",
+        "重写文本框中的最新要求，是本次修改的具体目标",
+        "当前页其余文字只是待改素材，需要围绕新标题和要求重新组织",
+      ],
       contentPolicy: "每个小节必须根据自己的标题、英雄、装备、功能或场景单独总结；同页和跨页都不得复用相同句式，仅替换名词也视为重复。适用场景、选择判断和实战提醒要分别给出具体条件与动作，不得输出万能套话。语气像懂游戏的朋友在小红书分享：自然、直接、可以有轻量提醒，但不要堆夸张网络词或机械地重复固定前缀。",
     },
     allowedSourceIds: [],

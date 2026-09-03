@@ -104,6 +104,7 @@ const defaultState = {
   outlineConfirmed: false,
   outlineEditingPageNo: 0,
   outlineEditorDraft: null,
+  outlineOriginalDraft: null,
   outlineEditError: "",
   outlineRewriteSuggestion: "换一种更自然、更具体的表达，保留本页重点",
   pages: project.pages.map((page) => ({ ...page, preservedFields: [], manualOrder: [] })),
@@ -743,6 +744,7 @@ function beginOutlineEdit(page, dynamic = false) {
     summary: dynamic ? (page.summary || "") : (page.purpose || ""),
     keyPointsText: dynamic ? (page.keyPoints || []).join("\n") : "",
   };
+  state.outlineOriginalDraft = structuredClone(state.outlineEditorDraft);
   state.outlineEditError = "";
   state.outlineRewriteSuggestion = "换一种更自然、更具体的表达，保留本页重点";
 }
@@ -770,7 +772,20 @@ async function rewriteOutlineDraftWithAi() {
   const suggestion = state.outlineRewriteSuggestion.trim();
   if (!pageNo || !draft || !suggestion || state.aiBusy) return;
   const editablePage = outlineDraftAsEditablePage(pageNo, draft);
-  const request = createRewriteFieldsRequest(editablePage, suggestion);
+  const original = state.outlineOriginalDraft || draft;
+  const userEditedFields = [
+    draft.kicker !== original.kicker ? "kicker" : "",
+    draft.title !== original.title ? "title" : "",
+    draft.summary !== original.summary ? "subtitle" : "",
+    draft.keyPointsText !== original.keyPointsText ? "keyPoints" : "",
+  ].filter(Boolean);
+  const request = createRewriteFieldsRequest(editablePage, suggestion, undefined, {
+    surface: "outline",
+    currentTitle: draft.title,
+    originalTitle: original.title,
+    titleWasEdited: draft.title !== original.title,
+    userEditedFields,
+  });
   state.aiBusy = true;
   state.aiTaskMessage = `正在重写第 ${pageNo} 页大纲…`;
   render();
@@ -810,7 +825,7 @@ function outlineEditForm(page, dynamic = false) {
       ${dynamic ? `<label class="outline-wide-field">页面要点<span>每行一条，保留 2～4 条</span><textarea data-field="outlineKeyPoints" rows="4" maxlength="320">${escapeHtml(draft.keyPointsText)}</textarea></label>` : ""}
     </div>
     <div class="outline-ai-rewrite">
-      <div><strong>${icon("refresh")}AI 重写这页</strong><span>只改当前页草稿，确认满意后再保存</span></div>
+      <div><strong>${icon("refresh")}AI 重写这页</strong><span>${state.aiStatus?.mode === "live" ? "会读取你刚改的标题和修改要求，只重写当前页" : "需要连接在线 AI 后才会执行，不再使用演示改写"}</span></div>
       <label class="sr-only" for="outline-rewrite-${page.pageNo}">第 ${page.pageNo} 页 AI 重写意见</label>
       <textarea id="outline-rewrite-${page.pageNo}" rows="2" data-field="outlineRewriteSuggestion" placeholder="例如：更像朋友分享，加入具体判断条件">${escapeHtml(state.outlineRewriteSuggestion)}</textarea>
       <button class="button secondary" type="button" data-action="rewrite-outline-page" ${state.aiBusy || !state.outlineRewriteSuggestion.trim() ? "disabled" : ""} aria-busy="${state.aiBusy}">${icon("refresh")}${state.aiBusy ? escapeHtml(state.aiTaskMessage || "AI 正在处理…") : "AI 重写当前页"}</button>
@@ -1903,7 +1918,13 @@ async function rewriteCurrentPageWithAi() {
   const current = state.pages.find((page) => page.id === state.currentPageId);
   const suggestion = state.rewriteSuggestion.trim();
   if (!current || current.locked || !suggestion || state.aiBusy) return;
-  const request = createRewriteFieldsRequest(current, suggestion);
+  const request = createRewriteFieldsRequest(current, suggestion, undefined, {
+    surface: "editor",
+    currentTitle: current.title,
+    originalTitle: current.baseTitle || current.title,
+    titleWasEdited: Boolean(current.baseTitle && current.title !== current.baseTitle),
+    userEditedFields: current.baseTitle && current.title !== current.baseTitle ? ["title"] : [],
+  });
   state.aiBusy = true;
   state.aiTaskMessage = `正在修改第 ${current.pageNo} 页…`;
   render();
@@ -2159,6 +2180,7 @@ app.addEventListener("click", (event) => {
   if (action === "cancel-outline-edit") {
     state.outlineEditingPageNo = 0;
     state.outlineEditorDraft = null;
+    state.outlineOriginalDraft = null;
     state.outlineEditError = "";
     saveState();
     render();
@@ -2696,6 +2718,7 @@ app.addEventListener("submit", (event) => {
   }
   state.outlineEditingPageNo = 0;
   state.outlineEditorDraft = null;
+  state.outlineOriginalDraft = null;
   state.outlineEditError = "";
   clearExportArtifacts();
   saveState();

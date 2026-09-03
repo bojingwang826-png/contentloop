@@ -178,6 +178,34 @@ test("字段重写请求只暴露允许修改且未保留的文字", () => {
   assert.match(request.input.contentPolicy, /不得复用相同句式|具体条件/u);
 });
 
+test("大纲重写把手改标题和重写要求作为最高优先级意图交给在线模型", async () => {
+  const page = pageFixture();
+  page.preservedFields = [];
+  page.title = "茂凯的技能参数与实战用法";
+  const request = createRewriteFieldsRequest(page, "整页改成讲技能范围、控制时间和适合站位", "outline-intent", {
+    surface: "outline",
+    currentTitle: page.title,
+    originalTitle: "为什么新手容易卡住",
+    titleWasEdited: true,
+    userEditedFields: ["title"],
+  });
+  const result = runMockAiTask(request, { page }).result;
+  let sentBody;
+  const service = createAiService({
+    env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
+    fetchImpl: async (_url, options) => {
+      sentBody = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ output_text: JSON.stringify(result) }) };
+    },
+  });
+  await service.run(request, { clientId: "outline-intent-user" });
+  assert.equal(request.input.intentContext.titleWasEdited, true);
+  assert.deepEqual(request.input.intentContext.userEditedFields, ["title"]);
+  assert.match(sentBody.input, /茂凯的技能参数与实战用法/u);
+  assert.match(sentBody.input, /优先级最高|不能恢复成旧标题/u);
+  assert.match(sentBody.input, /技能范围、控制时间和适合站位/u);
+});
+
 test("在线 AI 返回重复小节时会在应用前自动差异化", () => {
   const page = structuredClone(sampleProject.pages[2]);
   page.preservedFields = [];
@@ -230,21 +258,21 @@ test("越过字段白名单的模型响应会被整次拒绝", () => {
   assert.match(checked.issues.join("；"), /未允许字段/);
 });
 
-test("静态托管没有 AI 接口时自动回退演示 provider", async () => {
+test("静态托管没有 AI 接口时不会把演示规则冒充成真实重写", async () => {
   const page = pageFixture();
   const request = createRewriteFieldsRequest(page, "提醒新手误区", "rewrite-static");
-  const response = await runAiTask(request, { page }, async () => ({ status: 404 }));
-  assert.equal(response.provider, "mock");
-  assert.equal(response.taskId, request.taskId);
+  await assert.rejects(
+    () => runAiTask(request, { page }, async () => ({ status: 404 })),
+    /尚未连接在线 AI|真实重写/u,
+  );
 });
 
-test("未配置 API Key 时服务端返回可用演示模式", async () => {
+test("未配置 API Key 时服务端拒绝伪装成 AI 的字段重写", async () => {
   const page = pageFixture();
   const request = createRewriteFieldsRequest(page, "更口语一点", "rewrite-server-mock");
   const service = createAiService({ env: {} });
   assert.equal(service.status().mode, "demo");
-  const response = await service.run(request, { clientId: "test", page });
-  assert.equal(response.provider, "mock");
+  await assert.rejects(() => service.run(request, { clientId: "test", page }), /不能把规则改写冒充成真实 AI/u);
 });
 
 test("在线模型连续两次返回无效结构时保留旧稿并报错", async () => {

@@ -1,6 +1,12 @@
 import { runMockAiTask } from "../domain/mock-ai-provider.js";
 import { validateAiTaskResponse } from "../domain/ai-contract.js";
 
+const liveOnlyTasks = new Set(["rewrite_fields"]);
+
+function liveAiRequiredMessage() {
+  return "当前网站尚未连接在线 AI，已停止使用演示改写。连接在线模型后，AI 才会按你的标题和修改要求真实重写；原内容没有变化。";
+}
+
 export async function getAiRuntimeStatus(fetchImpl = globalThis.fetch) {
   try {
     const response = await fetchImpl("/api/ai/status", { headers: { accept: "application/json" } });
@@ -23,14 +29,20 @@ export async function runAiTask(request, context = {}, fetchImpl = globalThis.fe
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify(request),
     });
-    if (response.status === 404) return runMockAiTask(request, context);
+    if (response.status === 404) {
+      if (liveOnlyTasks.has(request.taskType)) throw new Error(liveAiRequiredMessage());
+      return runMockAiTask(request, context);
+    }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || "在线 AI 暂时不可用，旧内容已保留");
     const checked = validateAiTaskResponse(payload, request);
     if (!checked.success) throw new Error(`AI 返回内容未通过检查：${checked.issues.join("；")}`);
     return payload;
   } catch (error) {
-    if (error instanceof TypeError) return runMockAiTask(request, context);
+    if (error instanceof TypeError) {
+      if (liveOnlyTasks.has(request.taskType)) throw new Error(liveAiRequiredMessage());
+      return runMockAiTask(request, context);
+    }
     throw error;
   }
 }

@@ -257,8 +257,19 @@ function modelInput(request) {
       pageId: request.input.pageId,
       suggestion: request.input.suggestion,
       fields: request.input.fields,
+      intentContext: request.input.intentContext,
+      instructionPriority: request.input.instructionPriority,
+      contentPolicy: request.input.contentPolicy,
     };
-    return `${common}\n只返回有实际变化的字段。不得改装备名、配方、图标、页面顺序或主要观点。\n任务输入：${JSON.stringify(safeInput)}`;
+    return `${common}
+这是一次真实的当前页重写，不是关键词替换，也不是按钮演示。先用一句话理解用户的最终修改意图，再重写需要变化的全部文字字段。
+执行优先级：
+1. 用户刚刚手动修改的当前标题和字段代表新的创作方向，优先级最高，绝不能恢复成旧标题或旧主题；如果 titleWasEdited=true，默认保留这个标题作为内容锚点，只有用户明确要求优化标题时才可改写标题。
+2. suggestion 是用户此刻的具体要求。要结合当前标题理解，不得只把 suggestion 原样塞进正文。
+3. fields 中的旧文字只是待改素材。若与新标题冲突，应整段重写；若用户要求整页换方向，所有相关字段都要一起更新。
+4. outline 场景要让页面说明和每条页面要点共同服务于新标题；editor 场景要让标题、补充说明及每个小节形成同一条叙事线。
+只返回有实际变化的字段。不得改装备名、配方、图标、页面顺序或未经支持的游戏事实。summary 必须具体说明你理解了什么意图、改了哪些方向。
+任务输入：${JSON.stringify(safeInput)}`;
   }
   return `${common}\n正文保持朋友安利型、手机短段落和轻量 emoji；资料不足时使用资料整理口吻。\n任务输入：${JSON.stringify(request.input)}`;
 }
@@ -355,6 +366,9 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
   async function run(rawRequest, { clientId = "local", page } = {}) {
     const checked = validateAiTaskRequest(rawRequest);
     if (!checked.success) throw Object.assign(new Error(checked.issues.join("；")), { statusCode: 400 });
+    if (!apiKey && rawRequest.taskType === "rewrite_fields") {
+      throw Object.assign(new Error("在线 AI 尚未配置，不能把规则改写冒充成真实 AI。原内容已保留。"), { statusCode: 503 });
+    }
     if (!apiKey) return runMockAiTask(rawRequest, { page: page || rawRequest.input?.page });
     consume(clientId);
     return callOpenAi(rawRequest);
