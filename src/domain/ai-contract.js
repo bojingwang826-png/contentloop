@@ -1,4 +1,5 @@
 import { ensureDistinctPageCopy } from "./state.js";
+import { cleanDisplayText } from "./page-render.js";
 
 const AI_TASK_TYPES = new Set(["understand_input", "extract_source", "build_research_brief", "generate_outline", "rewrite_fields", "generate_publish_copy"]);
 const editableProperties = new Set(["detail", "cue", "example"]);
@@ -441,14 +442,15 @@ export function validateAiTaskResponse(response, request) {
 }
 
 function setPageValue(page, path, value) {
+  const safeValue = cleanDisplayText(value);
   if (["title", "subtitle", "kicker"].includes(path)) {
-    page[path] = value;
+    page[path] = safeValue;
     return;
   }
   const match = path.match(/^items\.(\d+)\.(detail|cue|example)$/);
   if (!match) return;
   const item = page.blocks?.[0]?.items?.[Number(match[1])];
-  if (item && typeof item === "object") item[match[2]] = value;
+  if (item && typeof item === "object") item[match[2]] = safeValue;
 }
 
 export function applyRewriteFieldsResponse(pages, request, response) {

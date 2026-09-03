@@ -15,7 +15,7 @@ let cachedAt = 0;
 const CACHE_MS = 30 * 60 * 1000;
 
 function compact(value, max = 180) {
-  return String(value || "").replace(/<br\s*\/?>/gi, "；").replace(/<[^>]+>/g, " ").replace(/%i:[^%]+%/gi, "").replace(/@[^@]+@/g, "").replace(/[（(]\s*[）)]/g, "").replace(/；\s*；/g, "；").replace(/\s*([，。；])/g, "$1").replace(/\s+/g, " ").trim().slice(0, max);
+  return String(value || "").replace(/\\(?:r\\n|n|r|t)/gi, " ").replace(/<br\s*\/?>/gi, "；").replace(/<[^>]+>/g, " ").replace(/%i:[^%]+%/gi, "").replace(/@[^@]+@/g, "").replace(/[（(]\s*[）)]/g, "").replace(/；\s*；/g, "；").replace(/\s*([，。；])/g, "$1").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 function traitDescription(trait) {

@@ -321,6 +321,27 @@ test("在线 AI 返回仅替换英雄名的雷同段落会被拒绝并要求重�
   assert.match(checked.issues.join("；"), /句式雷同/u);
 });
 
+test("AI 重写结果中的转义换行不会进入页面正文", () => {
+  const page = pageFixture();
+  page.preservedFields = [];
+  const request = createRewriteFieldsRequest(page, "改写第一段", "rewrite-escape");
+  const response = {
+    taskId: request.taskId,
+    schemaVersion: 1,
+    provider: "deepseek",
+    model: "test",
+    result: {
+      pageId: page.id,
+      changes: [{ path: "subtitle", value: "技能介绍\\n\\n结合站位判断```" }],
+      summary: "清理并改写说明",
+      mode: "matched",
+    },
+    warnings: [], unknowns: [], usedSourceIds: [], usedFactIds: [], usedAssetIds: [],
+  };
+  const next = applyRewriteFieldsResponse([page], request, response)[0];
+  assert.equal(next.subtitle, "技能介绍 结合站位判断");
+});
+
 test("英雄技能重写会启用网页检索并在重复响应后带原因重试", async () => {
   const page = structuredClone(sampleProject.pages[2]);
   page.preservedFields = [];

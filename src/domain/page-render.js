@@ -1,6 +1,15 @@
 export const iconRoot = "./src/assets/game-icons";
 export const illustrationRoot = "./src/assets/illustrations";
 
+export function cleanDisplayText(value) {
+  return String(value || "")
+    .replace(/\\(?:r\\n|n|r|t)/giu, " ")
+    .replace(/[\r\n\t]+/gu, " ")
+    .replace(/`{1,3}/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 export const guideIllustrationAssets = {
   diagnosis: "problem-diagnosis-v1.png",
   tradeoff: "choice-tradeoff-v1.png",
@@ -80,7 +89,7 @@ export function getRulePageDensity(model) {
 }
 
 function normalizeVisual(visual) {
-  const name = String(visual?.name || "");
+  const name = cleanDisplayText(visual?.name);
   const externalSource = String(visual?.source || "");
   const trustedExternal = /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//i.test(externalSource);
   const source = trustedExternal ? externalSource : getIllustrationSource(name);
@@ -89,9 +98,9 @@ function normalizeVisual(visual) {
     kind: trustedExternal ? "official" : "illustration",
     name,
     source,
-    alt: String(visual?.alt || "与本页内容对应的概念配图"),
-    label: String(visual?.label || "内容概念图"),
-    reason: String(visual?.reason || "根据本页文字内容选择"),
+    alt: cleanDisplayText(visual?.alt || "与本页内容对应的概念配图"),
+    label: cleanDisplayText(visual?.label || "内容概念图"),
+    reason: cleanDisplayText(visual?.reason || "根据本页文字内容选择"),
   };
 }
 
@@ -100,15 +109,15 @@ function normalizeEntity(item, index) {
   const trustedImage = /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//i.test(imageUrl);
   return {
     number: index + 1,
-    name: String(item?.name || `英雄 ${index + 1}`),
-    detail: String(item?.detail || ""),
-    example: String(item?.example || ""),
-    iconName: String(item?.iconName || ""),
+    name: cleanDisplayText(item?.name || `英雄 ${index + 1}`),
+    detail: cleanDisplayText(item?.detail),
+    example: cleanDisplayText(item?.example),
+    iconName: cleanDisplayText(item?.iconName),
     imageUrl: trustedImage ? imageUrl : "",
     cost: Math.max(0, Number(item?.cost || 0)),
-    traits: Array.isArray(item?.traits) ? item.traits.map(String).filter(Boolean) : [],
+    traits: Array.isArray(item?.traits) ? item.traits.map(cleanDisplayText).filter(Boolean) : [],
     position: ["front", "back", "flex"].includes(item?.position) ? item.position : "flex",
-    positionLabel: String(item?.positionLabel || "灵活位"),
+    positionLabel: cleanDisplayText(item?.positionLabel || "灵活位"),
     boardSlot: Number.isInteger(item?.boardSlot?.row) && Number.isInteger(item?.boardSlot?.col)
       ? { row: Math.max(0, Math.min(3, item.boardSlot.row)), col: Math.max(0, Math.min(6, item.boardSlot.col)) }
       : null,
@@ -116,7 +125,7 @@ function normalizeEntity(item, index) {
 }
 
 export function parseRecipe(value) {
-  const recipe = String(value || "").trim();
+  const recipe = cleanDisplayText(value);
   const [ingredientsText = "", resultName = ""] = recipe.split(/[＝=]/).map((part) => part.trim());
   const ingredients = ingredientsText.split(/[＋+]/).map((part) => part.trim()).filter(Boolean);
   return { recipe, ingredients, resultName };
@@ -142,10 +151,10 @@ export function buildPageRenderModel(page, accountName = "", totalPages = 7) {
     pageNo: Number(page?.pageNo || 1),
     totalPages,
     type: String(page?.type || "cover"),
-    kicker: String(page?.kicker || "铲友装备课01"),
-    title: String(page?.title || ""),
-    subtitle: String(page?.subtitle || ""),
-    accountName: String(accountName || "账号名"),
+    kicker: cleanDisplayText(page?.kicker || "铲友装备课01"),
+    title: cleanDisplayText(page?.title),
+    subtitle: cleanDisplayText(page?.subtitle),
+    accountName: cleanDisplayText(accountName || "账号名"),
     seriesName: "铲友装备课01",
     contentKind: String(page?.contentKind || "equipment"),
     layoutStyle: String(page?.layoutStyle || "cards"),
@@ -159,7 +168,7 @@ export function buildPageRenderModel(page, accountName = "", totalPages = 7) {
     return {
       ...base,
       heroIcons: base.visual || base.contentKind !== "equipment" ? [] : defaultEquipmentIcons,
-      items: (block.items || []).map(String),
+      items: (block.items || []).map(cleanDisplayText),
     };
   }
 
@@ -174,11 +183,11 @@ export function buildPageRenderModel(page, accountName = "", totalPages = 7) {
     return {
       ...base,
       items: (block.items || []).map((item) => ({
-        name: String(item?.name || ""),
-        recipe: String(item?.recipe || ""),
-        tag: String(item?.tag || ""),
-        detail: String(item?.detail || ""),
-        cue: String(item?.cue || ""),
+        name: cleanDisplayText(item?.name),
+        recipe: cleanDisplayText(item?.recipe),
+        tag: cleanDisplayText(item?.tag),
+        detail: cleanDisplayText(item?.detail),
+        cue: cleanDisplayText(item?.cue),
       })),
     };
   }

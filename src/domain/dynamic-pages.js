@@ -1,4 +1,4 @@
-import { getIconSource } from "./page-render.js";
+import { cleanDisplayText, getIconSource } from "./page-render.js";
 
 const verifiedRecipes = [
   "大剑＋拳套＝无尽之刃",
@@ -246,7 +246,7 @@ function shortName(value, index) {
 }
 
 function boundedDetail(value, maxLength = 142) {
-  const clean = String(value || "")
+  const clean = cleanDisplayText(value)
     .replace(/。{2,}/gu, "。")
     .replace(/\s+/gu, " ")
     .trim();
@@ -590,7 +590,7 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     featuredEntities: entities,
     contentKind: kind,
     layoutStyle: page.layoutStyle || "cards",
-    layoutVersion: 7,
+    layoutVersion: 8,
   };
   if (page.pageNo === 1) {
     return {

@@ -38,6 +38,7 @@ import {
 } from "../src/domain/state.js";
 import {
   buildPageRenderModel,
+  cleanDisplayText,
   getAdaptiveTextDensity,
   getIconSource,
   getIllustrationSource,
@@ -357,6 +358,16 @@ test("高清画布换行不会让中文标点单独占一行", () => {
   assert.deepEqual(splitText(context, "这是一段说明。下一句", 60), ["这是一段说明。", "下一句"]);
   assert.deepEqual(splitText(context, "先看（条件）再决定", 30), ["先看", "（条件）", "再决定"]);
   assert.ok(splitText(context, "标题内容，继续", 40).every((line) => !/^[，。！？；：、]/u.test(line)));
+});
+
+test("页面展示会清理模型返回的转义换行和代码标记", () => {
+  assert.equal(cleanDisplayText("第一段\\n\\n第二段```"), "第一段 第二段");
+  const page = structuredClone(sampleProject.pages[2]);
+  page.subtitle = "说明文字\\n\\n不要显示代码";
+  page.blocks[0].items[0].detail = "英雄技能\\n接住伤害`";
+  const model = buildPageRenderModel(page, "铲友研究所", 7);
+  assert.equal(model.subtitle, "说明文字 不要显示代码");
+  assert.equal(model.items[0].detail, "英雄技能 接住伤害");
 });
 
 test("装备卡正文与怎么选区域始终保留安全间距", () => {
