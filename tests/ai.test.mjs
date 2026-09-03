@@ -458,6 +458,34 @@ test("在线模型连续两次返回无效结构时保留旧稿并报错", async
   assert.equal(calls, 2);
 });
 
+test("在线模型返回 Markdown JSON 代码块时仍能正确解析", async () => {
+  const request = createPublishCopyRequest(sampleProject.exportCopy.body, "更有网感", "publish-fenced-json");
+  const result = { body: sampleProject.exportCopy.body, summary: "已调整表达", mode: "matched" };
+  const service = createAiService({
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ output_text: `\`\`\`json\n${JSON.stringify(result)}\n\`\`\`` }),
+    }),
+  });
+  const response = await service.run(request, { clientId: "fenced-json-user" });
+  assert.deepEqual(response.result, result);
+});
+
+test("在线模型在 JSON 前后添加说明时仍能提取对象", async () => {
+  const request = createPublishCopyRequest(sampleProject.exportCopy.body, "更自然", "publish-wrapped-json");
+  const result = { body: sampleProject.exportCopy.body, summary: "已自然化", mode: "matched" };
+  const service = createAiService({
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ output_text: `以下是结果：\n${JSON.stringify(result)}\n已完成。` }),
+    }),
+  });
+  const response = await service.run(request, { clientId: "wrapped-json-user" });
+  assert.deepEqual(response.result, result);
+});
+
 test("演示模式不消耗在线额度", async () => {
   const request = createPublishCopyRequest(sampleProject.exportCopy.body, "精简一点", "publish-limit");
   const service = createAiService({ env: { AI_REQUESTS_PER_MINUTE: "1", AI_REQUESTS_PER_DAY: "2" } });

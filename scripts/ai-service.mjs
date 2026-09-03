@@ -14,6 +14,29 @@ function extractOutputText(payload) {
   return "";
 }
 
+function parseStructuredOutput(value) {
+  const text = String(value || "").replace(/^\uFEFF/, "").trim();
+  if (!text) throw new Error("DeepSeek 没有返回可解析的内容");
+
+  const candidates = [text];
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) candidates.push(fenced[1].trim());
+
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) candidates.push(text.slice(firstBrace, lastBrace + 1));
+
+  let lastError;
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`DeepSeek 返回的内容不是合法 JSON：${lastError?.message || "无法解析"}`);
+}
+
 function citationUrls(payload) {
   const urls = new Set();
   for (const item of payload?.output || []) {
@@ -314,8 +337,8 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
       try {
         const requestBody = {
           model,
-          instructions: "输出必须严格匹配 JSON Schema。",
-          input: `${modelInput(request)}${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，不要再次返回相同结构。` : ""}`,
+          instructions: "输出必须严格匹配 JSON Schema。只返回一个 JSON 对象，不要使用 Markdown 代码块，不要添加解释、前言或结尾。",
+          input: `${modelInput(request)}${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，只输出合法 JSON 对象，不要再次返回相同结构。` : ""}`,
           reasoning: { effort: "none" },
           max_output_tokens: new Set(["understand_input", "build_research_brief", "generate_outline"]).has(request.taskType) ? 3000 : 1800,
           text: { format: { type: "json_schema", name: request.taskType, schema: resultSchema(request) } },
@@ -337,7 +360,7 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
         });
         const payload = await apiResponse.json();
         if (!apiResponse.ok) throw new Error(payload?.error?.message || "DeepSeek 请求失败");
-        const result = normalizeUnderstandResult(JSON.parse(extractOutputText(payload)), request, payload);
+        const result = normalizeUnderstandResult(parseStructuredOutput(extractOutputText(payload)), request, payload);
         const response = {
           taskId: request.taskId,
           schemaVersion: 1,
