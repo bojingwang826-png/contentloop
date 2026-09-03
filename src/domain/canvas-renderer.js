@@ -304,21 +304,26 @@ function drawHeroPortrait(ctx, images, entity, x, y, size, audit, label = "英�
 }
 
 function drawHeroStrip(ctx, entities, images, x, y, width, height, audit) {
-  const list = entities.slice(0, 7);
-  const rows = list.length > 4 ? [list.slice(0, 4), list.slice(4)] : [list];
+  const list = entities;
+  if (!list.length) return;
+  const columnCount = Math.min(5, Math.max(1, Math.ceil(list.length / Math.ceil(list.length / 5))));
+  const rows = Array.from({ length: Math.ceil(list.length / columnCount) }, (_, index) => (
+    list.slice(index * columnCount, (index + 1) * columnCount)
+  ));
+  const rowHeight = height / rows.length;
   rows.forEach((row, rowIndex) => {
-    const portrait = 92;
-    const gap = 24;
+    const gap = rows.length >= 3 ? 14 : 24;
+    const portrait = Math.max(54, Math.min(92, Math.floor(rowHeight - 46), Math.floor((width - ((row.length - 1) * gap)) / row.length)));
     const rowWidth = (row.length * portrait) + (Math.max(0, row.length - 1) * gap);
     const startX = x + ((width - rowWidth) / 2);
-    const rowY = y + 18 + (rowIndex * 152);
+    const rowY = y + (rowIndex * rowHeight) + Math.max(4, (rowHeight - portrait - 30) / 2);
     row.forEach((entity, index) => {
       const px = startX + (index * (portrait + gap));
       drawHeroPortrait(ctx, images, entity, px, rowY, portrait, audit);
       ctx.fillStyle = colors.text;
       ctx.textAlign = "center";
-      drawFittedText(ctx, entity.name, px + (portrait / 2), rowY + 116, portrait + 16, 30, {
-        preferredSize: 19, minSize: 15, weight: 700, lineFactor: 1.15, maxLines: 1,
+      drawFittedText(ctx, entity.name, px + (portrait / 2), rowY + portrait + 24, portrait + 18, 26, {
+        preferredSize: rows.length >= 3 ? 15 : 19, minSize: 12, weight: 700, lineFactor: 1.12, maxLines: 1,
       }, audit, `${entity.name}名称`);
       ctx.textAlign = "left";
     });
@@ -358,10 +363,10 @@ function drawHeader(ctx, model) {
   ctx.textAlign = "left";
 }
 
-export function calculateTitleBodyTop(compact, titleLineCount, subtitleLineCount) {
+export function calculateTitleBodyTop(compact, titleLineCount, subtitleLineCount, subtitleLineHeight = 43) {
   const titleStart = compact ? 182 : 220;
   const titleBottom = titleStart + ((titleLineCount - 1) * 78);
-  return titleBottom + 58 + (subtitleLineCount * 43);
+  return titleBottom + 58 + (subtitleLineCount * subtitleLineHeight);
 }
 
 export function getTitleTextLayout(compact) {
@@ -391,19 +396,24 @@ function drawTitle(ctx, model, compact = false, audit = null) {
   );
   const titleBottom = (compact ? 182 : 220) + ((titleLineCount - 1) * 78);
   ctx.fillStyle = colors.muted;
-  setFont(ctx, compact ? 28 : 31, 500);
-  const subtitleLines = drawWrappedText(
+  const subtitleLayout = drawFittedText(
     ctx,
     model.subtitle,
     64,
     titleBottom + 58,
     952,
-    43,
-    2,
+    compact ? 174 : 168,
+    {
+      preferredSize: compact ? 28 : 31,
+      minSize: 16,
+      weight: 500,
+      lineFactor: 1.38,
+      maxLines: 8,
+    },
     audit,
     "副标题",
   );
-  const bodyTop = calculateTitleBodyTop(compact, titleLineCount, subtitleLines);
+  const bodyTop = calculateTitleBodyTop(compact, titleLineCount, subtitleLayout.lines.length, subtitleLayout.lineHeight) + 8;
   if (audit) audit.bodyTop = bodyTop;
   return bodyTop;
 }
@@ -738,30 +748,34 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
 
 function drawRosterCard(ctx, item, images, x, y, width, height, audit, index) {
   fillRounded(ctx, x, y, width, height, 25, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
-  const portraitSize = 84;
-  drawHeroPortrait(ctx, images, item, x + 22, y + 22, portraitSize, audit);
+  const compact = height < 190;
+  const portraitSize = compact ? Math.max(48, Math.min(62, height - 74)) : 84;
+  const inset = compact ? 14 : 22;
+  const copyX = x + inset + portraitSize + (compact ? 14 : 20);
+  drawHeroPortrait(ctx, images, item, x + inset, y + inset, portraitSize, audit);
   ctx.fillStyle = colors.text;
-  drawFittedText(ctx, item.name, x + 126, y + 50, width - 150, 48, {
-    preferredSize: 28, minSize: 21, weight: 800, lineFactor: 1.15, maxLines: 1,
+  drawFittedText(ctx, item.name, copyX, y + (compact ? 34 : 50), x + width - copyX - 20, compact ? 32 : 48, {
+    preferredSize: compact ? 21 : 28, minSize: 16, weight: 800, lineFactor: 1.15, maxLines: 1,
   }, audit, `成员 ${index + 1} 名称`);
   ctx.fillStyle = colors.accent;
-  setFont(ctx, 20, 700);
-  ctx.fillText(`${item.cost || "?"}费 · ${item.positionLabel}`, x + 126, y + 88);
+  setFont(ctx, compact ? 16 : 20, 700);
+  ctx.fillText(`${item.cost || "?"}费 · ${item.positionLabel}`, copyX, y + (compact ? 61 : 88));
   ctx.fillStyle = colors.muted;
-  const detailTop = y + 132;
-  drawFittedText(ctx, item.detail || item.traits.join(" / "), x + 22, detailTop, width - 44, height - 146, {
-    preferredSize: 20, minSize: 16, weight: 500, lineFactor: 1.3, maxLines: 4,
+  const detailTop = y + (compact ? 82 : 132);
+  const detail = compact ? (item.traits.join(" / ") || item.detail) : item.detail || item.traits.join(" / ");
+  drawFittedText(ctx, detail, x + inset, detailTop, width - (inset * 2), Math.max(24, height - (compact ? 92 : 146)), {
+    preferredSize: compact ? 16 : 20, minSize: 13, weight: 500, lineFactor: 1.25, maxLines: compact ? 2 : 4,
   }, audit, `成员 ${index + 1} 羁绊`);
 }
 
 function drawRoster(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 18;
-  const count = Math.min(7, model.items.length);
+  const count = model.items.length;
   const rows = Math.ceil(count / 2);
   const gap = 16;
   const cardHeight = Math.min(270, Math.floor((1318 - bodyTop - ((rows - 1) * gap)) / rows));
   const width = 467;
-  model.items.slice(0, count).forEach((item, index) => {
+  model.items.forEach((item, index) => {
     const isOddLast = count % 2 === 1 && index === count - 1;
     const x = isOddLast ? 306.5 : 64 + ((index % 2) * (width + gap));
     const y = bodyTop + (Math.floor(index / 2) * (cardHeight + gap));
@@ -815,7 +829,7 @@ function drawBoard(ctx, model, images, audit) {
     }
   }
   const occupied = new Set();
-  model.items.slice(0, 9).forEach((item, index) => {
+  model.items.slice(0, 28).forEach((item, index) => {
     let slot = item.boardSlot || fallbackBoardSlot(item, index);
     while (occupied.has(`${slot.row}:${slot.col}`)) slot = { row: (slot.row + 1) % 4, col: (slot.col + 2) % 7 };
     occupied.add(`${slot.row}:${slot.col}`);

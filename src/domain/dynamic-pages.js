@@ -401,14 +401,14 @@ export function enrichOutlineWithGameData(outline, topic) {
   const pages = outline.pages.map((page) => {
     if (page.pageNo === 1) return enrichPage(page, {
       summary: `${topic.angle || page.summary} 本篇使用当前赛季真实英雄名单与官方头像。`,
-      keyPoints: [`真实成员：${joinNames(entities.slice(0, 4).map((item) => item.name))}`, `${traitName}效果与开启条件`, "基础建议站位与临场换边"],
+      keyPoints: [`真实成员共 ${entities.length} 名`, `${traitName}效果与开启条件`, "基础建议站位与临场换边"],
       assetNeeds: ["当前赛季英雄官方头像"],
     });
     if (page.pageNo === 2 && entities.length >= 3) return enrichPage(page, {
       kicker: "先认真实成员",
       title: `${traitName}有哪些英雄`,
       summary: `按费用、羁绊和基础职责认识 ${entities.length} 名真实成员，不再用泛化文字代替阵容内容。`,
-      keyPoints: entities.slice(0, 7).map((item) => `${item.name}：${item.cost || "?"}费 · ${(item.traits || []).join(" / ") || traitName} · ${item.positionLabel || "灵活位"}`),
+      keyPoints: entities.map((item) => `${item.name}：${item.cost || "?"}费 · ${(item.traits || []).join(" / ") || traitName} · ${item.positionLabel || "灵活位"}`),
       layoutStyle: "roster",
       assetNeeds: ["真实英雄名单与官方头像"],
     });
@@ -494,7 +494,7 @@ function materializeEntity(entity, index, layoutStyle) {
 
 function outlinePageToEditorPage(page, topic, visualPlan) {
   const kind = topicKind(topic);
-  const entities = Array.isArray(topic?.entities) ? topic.entities.slice(0, 7) : [];
+  const entities = Array.isArray(topic?.entities) ? topic.entities : [];
   const base = {
     id: `dynamic-page-${page.pageNo}`,
     pageNo: page.pageNo,
@@ -514,7 +514,7 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     featuredEntities: entities,
     contentKind: kind,
     layoutStyle: page.layoutStyle || "cards",
-    layoutVersion: 4,
+    layoutVersion: 5,
   };
   if (page.pageNo === 1) {
     return {

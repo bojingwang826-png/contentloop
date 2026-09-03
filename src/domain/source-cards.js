@@ -54,7 +54,8 @@ export function normalizeSourceCard(source, index = 0) {
     publishedAt: compact(source?.publishedAt, 40),
     excerpt: compact(source?.excerpt || source?.manualText, 1200),
     structured: normalizeStructuredSource(source?.structured),
-    retrievalMethod: new Set(["direct", "reader", "manual"]).has(source?.retrievalMethod) ? source.retrievalMethod : "",
+    retrievalMethod: new Set(["direct", "reader", "manual", "network", "user_reference", "private_reference"]).has(source?.retrievalMethod) ? source.retrievalMethod : "",
+    publicDisplay: source?.publicDisplay !== false,
     extractionStatus,
     failureReason: compact(source?.failureReason, 240),
     // Automatic extraction remains pending until the user confirms what was read.

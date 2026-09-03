@@ -1355,6 +1355,14 @@ textarea:disabled {
   overflow: hidden;
 }
 
+.topic-entity-count {
+  display: block;
+  margin-top: 10px;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .topic-entity {
   display: grid;
   flex: 0 0 44px;
@@ -1379,6 +1387,22 @@ textarea:disabled {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.topic-entity-more {
+  align-content: start;
+}
+
+.topic-entity-more b {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px dashed rgb(242 200 98 / 55%);
+  border-radius: 10px;
+  color: var(--accent-strong);
+  background: rgb(242 200 98 / 8%);
+  font-size: 13px;
 }
 
 .analysis-selected-topic {

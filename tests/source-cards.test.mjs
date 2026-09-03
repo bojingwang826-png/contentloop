@@ -9,6 +9,12 @@ import {
   updateSourceCard,
 } from "../src/domain/source-cards.js";
 
+test("来源标准化会保留非公开展示标记", () => {
+  const [source] = normalizeSourceCards([{ id: "private", url: "https://example.com/post", publicDisplay: false, retrievalMethod: "private_reference" }]);
+  assert.equal(source.publicDisplay, false);
+  assert.equal(source.retrievalMethod, "private_reference");
+});
+
 function source(id, url, excerpt = "这是一段用于核对来源的公开正文片段，长度已经超过二十个字。") {
   return { id, url, title: id, excerpt, extractionStatus: "manual", confirmed: false };
 }

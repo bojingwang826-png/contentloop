@@ -33,6 +33,34 @@ test("指定羁绊时优先生成该真实羁绊和成员解析", () => {
   assert.match(result.topics[0].title, /灵魂莲华/);
   assert.deepEqual(result.topics[0].entities.map((item) => item.name), ["英雄甲", "英雄乙", "英雄丙"]);
   assert.match(result.topics[0].angle, /获得法术和生命加成/);
+  assert.equal(new Set(result.topics.map((topic) => topic.title)).size, 5);
+  assert.ok(result.topics.every((topic) => topic.gameData.traitName === "灵魂莲华"));
+  assert.ok(result.topics.every((topic) => topic.entities.map((item) => item.name).join("、") === "英雄甲、英雄乙、英雄丙"));
+});
+
+test("非官方创作者参考不会作为公开来源展示", () => {
+  const result = buildGameResearch("灵魂莲华羁绊解析", bundle);
+  const privateSources = result.sources.filter((source) => source.id.startsWith("source-creator-") || source.id === "source-jcc-reference");
+  assert.equal(privateSources.length, 4);
+  assert.ok(privateSources.every((source) => source.publicDisplay === false));
+  assert.ok(privateSources.every((source) => source.retrievalMethod === "private_reference"));
+});
+
+test("羁绊成员数量不再被固定截成五个或七个", () => {
+  const extraMembers = Array.from({ length: 6 }, (_, index) => champion(`X${index}`, `扩展英雄${index + 1}`, (index % 5) + 1, ["灵魂莲华"], index % 2 ? 4 : 1));
+  const expandedChampions = [...champions, ...extraMembers];
+  const expandedBundle = {
+    ...bundle,
+    cdragon: { ...bundle.cdragon, sets: { 18: { ...bundle.cdragon.sets[18], champions: expandedChampions } } },
+    ddragonChampions: { data: Object.fromEntries(expandedChampions.map((item) => [item.apiName, { id: item.apiName, image: { full: `${item.name}.png` } }])) },
+  };
+  const result = buildGameResearch("灵魂莲华羁绊解析", expandedBundle);
+  assert.equal(result.topics[0].entities.length, 9);
+  const outline = { pages: Array.from({ length: 7 }, (_, index) => ({ pageNo: index + 1, role: "detail", kicker: "测试", title: "测试", summary: "测试说明", keyPoints: ["测试"], factIds: [], assetNeeds: [] })) };
+  const project = materializeDynamicProject({ topic: result.topics[0], outline: enrichOutlineWithGameData(outline, result.topics[0]), viewpointId: "view-1", research: { viewpoints: [{ id: "view-1", title: "真实阵容" }] } });
+  assert.equal(buildPageRenderModel(project.pages[0], "测试", 7).heroEntities.length, 9);
+  assert.equal(buildPageRenderModel(project.pages[1], "测试", 7).items.length, 9);
+  assert.equal(buildPageRenderModel(project.pages[3], "测试", 7).items.length, 9);
 });
 
 test("实时题目的官方素材会进入第四步页面并被预览模型保留", () => {
