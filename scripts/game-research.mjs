@@ -65,6 +65,8 @@ function entity(champion) {
     alt: `${champion.name}英雄头像`,
     range,
     role: champion.role || "",
+    abilityName: compact(champion.ability?.name || "", 48),
+    abilityDescription: compact(champion.ability?.desc || "", 220),
     position,
     positionLabel: position === "front" ? "前排" : position === "back" ? "后排" : "灵活位",
   };

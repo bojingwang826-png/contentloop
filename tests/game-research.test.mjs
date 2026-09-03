@@ -93,7 +93,7 @@ test("实时题目的官方素材会进入第四步页面并被预览模型保�
   assert.equal(closingModel.layoutStyle, "checklist");
   assert.equal(closingModel.heroEntities.length, 3);
   assert.deepEqual(closingModel.heroEntities.map((item) => item.imageUrl), model.heroEntities.map((item) => item.imageUrl));
-  assert.ok(project.pages.every((page) => page.layoutVersion === 6));
+  assert.ok(project.pages.every((page) => page.layoutVersion === 7));
   assert.match(project.pages[6].title, /灵魂莲华|收藏/);
   assert.equal(new Set(closingModel.items.map((item) => item.name)).size, 4);
   assert.equal(new Set(closingModel.items.map((item) => item.detail)).size, 4);

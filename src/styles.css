@@ -3201,6 +3201,10 @@ details div {
   font-size: clamp(24px, 5vw, 43px);
   line-height: 1.18;
   letter-spacing: -0.03em;
+  line-break: strict;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  word-break: normal;
 }
 
 .preview-title p {
@@ -3208,6 +3212,16 @@ details div {
   margin: 0;
   color: #e0d4e8;
   font-size: clamp(12px, 2vw, 16px);
+  line-break: strict;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+  word-break: normal;
+}
+
+.note-preview :where(p, em, strong, small) {
+  line-break: strict;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .preview-body {

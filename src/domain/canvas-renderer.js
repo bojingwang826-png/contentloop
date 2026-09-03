@@ -52,12 +52,28 @@ function setFont(ctx, size, weight = 400) {
   ctx.font = `${weight} ${size}px "Microsoft YaHei", "PingFang SC", system-ui, sans-serif`;
 }
 
-function splitText(ctx, text, maxWidth) {
+const forbiddenLineStart = new Set(Array.from(`，。！？；：、）》」』】〕〉…％%”’"'`));
+const forbiddenLineEnd = new Set(Array.from("（《「『【〔〈“‘"));
+
+export function splitText(ctx, text, maxWidth) {
   const lines = [];
   let line = "";
   for (const char of String(text || "")) {
     const candidate = line + char;
     if (line && ctx.measureText(candidate).width > maxWidth) {
+      // Chinese punctuation must stay with the preceding text. Let a closing
+      // mark hang slightly outside the measure instead of placing it alone.
+      if (forbiddenLineStart.has(char)) {
+        line = candidate;
+        continue;
+      }
+      // Opening brackets should travel with at least one following character.
+      const tail = line.at(-1);
+      if (tail && forbiddenLineEnd.has(tail) && line.length > 1) {
+        lines.push(line.slice(0, -1));
+        line = `${tail}${char}`;
+        continue;
+      }
       lines.push(line);
       line = char;
     } else {

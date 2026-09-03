@@ -247,6 +247,32 @@ function idsStayAllowed(used, allowed) {
   return Array.isArray(used) && used.every((id) => whitelist.has(id));
 }
 
+function rewriteCopySkeleton(value, field = {}) {
+  const subject = String(field.label || "").split(" · ")[0].trim();
+  let text = String(value || "").toLowerCase();
+  if (subject) text = text.replaceAll(subject.toLowerCase(), "{对象}");
+  return text
+    .replace(/[“”"'‘’\s，。！？；：、,.!?;:（）()【】\[\]《》<>]/gu, "")
+    .replace(/第?\d+|\d+费/gu, "{数}");
+}
+
+function bigramSimilarity(left, right) {
+  if (left === right) return 1;
+  if (left.length < 8 || right.length < 8) return 0;
+  const grams = (text) => Array.from({ length: text.length - 1 }, (_, index) => text.slice(index, index + 2));
+  const rightCounts = new Map();
+  for (const gram of grams(right)) rightCounts.set(gram, (rightCounts.get(gram) || 0) + 1);
+  let overlap = 0;
+  const leftGrams = grams(left);
+  for (const gram of leftGrams) {
+    const count = rightCounts.get(gram) || 0;
+    if (!count) continue;
+    overlap += 1;
+    rightCounts.set(gram, count - 1);
+  }
+  return (2 * overlap) / (leftGrams.length + Math.max(1, right.length - 1));
+}
+
 export function validateAiTaskResponse(response, request) {
   const issues = [];
   if (!response || typeof response !== "object") return { success: false, issues: ["AI 响应必须是对象"] };
@@ -330,6 +356,24 @@ export function validateAiTaskResponse(response, request) {
         seen.add(change?.path);
         if (typeof change?.value !== "string" || !change.value.trim() || change.value.length > 500) {
           issues.push(`字段 ${change?.path || "未知"} 内容无效`);
+        }
+      }
+      const fieldByPath = new Map(request.input.fields.map((field) => [field.path, field]));
+      const groups = new Map();
+      for (const change of response.result.changes) {
+        const match = String(change?.path || "").match(/^items\.\d+\.(detail|cue|example)$/u);
+        if (!match || typeof change?.value !== "string") continue;
+        const entries = groups.get(match[1]) || [];
+        entries.push({ path: change.path, skeleton: rewriteCopySkeleton(change.value, fieldByPath.get(change.path)) });
+        groups.set(match[1], entries);
+      }
+      for (const [property, entries] of groups) {
+        for (let left = 0; left < entries.length; left += 1) {
+          for (let right = left + 1; right < entries.length; right += 1) {
+            if (bigramSimilarity(entries[left].skeleton, entries[right].skeleton) >= 0.72) {
+              issues.push(`AI 返回的${property}小节句式雷同：${entries[left].path} 与 ${entries[right].path}`);
+            }
+          }
         }
       }
       if (request.input.rewriteScope === "full_page") {

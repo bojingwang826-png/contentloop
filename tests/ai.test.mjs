@@ -198,9 +198,19 @@ test("大纲重写把手改标题和重写要求作为最高优先级意图交�
     titleWasEdited: true,
     userEditedFields: ["title"],
   });
+  const rewriteAngles = [
+    "先解释技能范围覆盖哪一格，提醒主坦站角落时别把控制打空",
+    "再说明控制持续时间如何影响启动，适合顶在敌方主输出同侧",
+    "最后补充残局换位方法，遇到切后阵容就往主 C 一侧回收",
+  ];
   const result = {
     pageId: page.id,
-    changes: request.input.mustChangePaths.map((path) => ({ path, value: `${request.input.fields.find((field) => field.path === path).label}：围绕重装战士技能重新讲解` })),
+    changes: request.input.mustChangePaths.map((path, index) => ({
+      path,
+      value: path.match(/^items\.(\d+)\./u)
+        ? rewriteAngles[Number(path.match(/^items\.(\d+)\./u)[1]) % rewriteAngles.length]
+        : `${request.input.fields.find((field) => field.path === path).label}：围绕茂凯技能重新讲解第 ${index + 1} 项`,
+    })),
     summary: "理解为整页改讲重装战士技能，并已重写所有旧正文",
     mode: "matched",
   };
@@ -258,7 +268,7 @@ test("整页删除重写要求会强制页签、说明和全部正文实际变�
   assert.match(checked.issues.join("；"), /没有实际变化/u);
 });
 
-test("在线 AI 返回重复小节时会在应用前自动差异化", () => {
+test("在线 AI 返回完全重复的小节会被拒绝", () => {
   const page = structuredClone(sampleProject.pages[2]);
   page.preservedFields = [];
   const request = createRewriteFieldsRequest(page, "分别总结每件装备", "rewrite-distinct");
@@ -273,13 +283,60 @@ test("在线 AI 返回重复小节时会在应用前自动差异化", () => {
     result: { pageId: page.id, changes, summary: "逐项整理", mode: "matched" },
     warnings: [], unknowns: [], usedSourceIds: [], usedFactIds: [], usedAssetIds: [],
   };
-  const next = applyRewriteFieldsResponse([page], request, response)[0];
-  const items = next.blocks[0].items;
+  const checked = validateAiTaskResponse(response, request);
+  assert.equal(checked.success, false);
+  assert.match(checked.issues.join("；"), /句式雷同/u);
+});
 
-  assert.equal(new Set(items.map((item) => item.detail)).size, items.length);
-  assert.equal(new Set(items.map((item) => item.cue)).size, items.length);
-  assert.match(items[1].detail + items[1].cue, /高血量|前排/u);
-  assert.match(items[2].detail + items[2].cue, /破甲|护甲/u);
+test("在线 AI 返回仅替换英雄名的雷同段落会被拒绝并要求重试", () => {
+  const page = structuredClone(sampleProject.pages[2]);
+  page.preservedFields = [];
+  page.blocks[0].items = [
+    { name: "黛安娜", detail: "旧介绍一", example: "旧提醒一" },
+    { name: "赫卡里姆", detail: "旧介绍二", example: "旧提醒二" },
+  ];
+  const request = createRewriteFieldsRequest(page, "整页重写，分别介绍英雄技能", "rewrite-similar");
+  const response = {
+    taskId: request.taskId,
+    schemaVersion: 1,
+    provider: "deepseek",
+    model: "test",
+    result: {
+      pageId: page.id,
+      changes: request.input.fields.map((field) => ({
+        path: field.path,
+        value: field.path === "kicker" ? "英雄技能"
+          : field.path === "title" ? "重装战士技能介绍"
+            : field.path === "subtitle" ? "逐个看技能与站位"
+              : field.path.includes("items.0") ? "黛安娜主要任务是接住第一波伤害并给后排争取启动时间。"
+                : "赫卡里姆主要任务是接住第一波伤害并给后排争取启动时间。",
+      })),
+      summary: "逐个介绍英雄",
+      mode: "matched",
+    },
+    warnings: [], unknowns: [], usedSourceIds: [], usedFactIds: [], usedAssetIds: [],
+  };
+  const checked = validateAiTaskResponse(response, request);
+  assert.equal(checked.success, false);
+  assert.match(checked.issues.join("；"), /句式雷同/u);
+});
+
+test("英雄技能重写会启用网页检索并在重复响应后带原因重试", async () => {
+  const page = structuredClone(sampleProject.pages[2]);
+  page.preservedFields = [];
+  const request = createRewriteFieldsRequest(page, "分别介绍本赛季英雄技能", "rewrite-search");
+  const sent = [];
+  const service = createAiService({
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
+    fetchImpl: async (_url, options) => {
+      const body = JSON.parse(options.body);
+      sent.push(body);
+      const changes = request.input.fields.map((field, index) => ({ path: field.path, value: `${field.value}（技能资料核对项 ${index + 1}）` }));
+      return { ok: true, json: async () => ({ output_text: JSON.stringify({ pageId: page.id, changes, summary: "按要求重写", mode: "matched" }) }) };
+    },
+  });
+  await service.run(request, { clientId: "rewrite-search-user" });
+  assert.equal(sent[0].tools[0].type, "web_search");
 });
 
 test("演示 provider 使用统一信封并继续保护装备事实", () => {

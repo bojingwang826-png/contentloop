@@ -271,6 +271,9 @@ function modelInput(request) {
 3. fields 中的旧文字只是待改素材。若与新标题冲突，应整段重写；若用户要求整页换方向，所有相关字段都要一起更新。
 4. outline 场景要让页面说明和每条页面要点共同服务于新标题；editor 场景要让标题、补充说明及每个小节形成同一条叙事线。
 5. rewriteScope=full_page 时是整页推翻重写：必须返回 mustChangePaths 中的每个字段，而且每个值都要与原字段明显不同。手动改过的标题是新主题锚点，不要把旧正文换几个名词继续使用。
+6. 同一页的每个英雄或小节必须分别写：对象是谁、它独有的作用或条件是什么、读者下一步怎么做。禁止复制同一句话后只替换英雄名；禁止重复相同开头、相同论证顺序或相同结尾。
+7. 如果是成员/英雄介绍页，逐条利用 fields 和 page 中已有的英雄名、费用、羁绊、技能、站位与职责；让每个英雄承担不同信息重点。资料中没有的精确技能或数值不能猜，但可以明确提醒需要联网核验。
+8. 输出前逐对比较所有 items.*.detail、items.*.cue 和 items.*.example；任意两段结构相似都要重写其中一段。四个小节应分别采用例如“技能作用、承伤/输出职责、站位调整、上场条件”等不同切面。
 只返回有实际变化的字段。不得改装备名、配方、图标、页面顺序或未经支持的游戏事实。summary 必须具体说明你理解了什么意图、改了哪些方向。
 任务输入：${JSON.stringify(safeInput)}`;
   }
@@ -312,7 +315,7 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
         const requestBody = {
           model,
           instructions: "输出必须严格匹配 JSON Schema。",
-          input: modelInput(request),
+          input: `${modelInput(request)}${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，不要再次返回相同结构。` : ""}`,
           reasoning: { effort: "low" },
           max_output_tokens: new Set(["understand_input", "build_research_brief", "generate_outline"]).has(request.taskType) ? 3000 : 1800,
           text: { format: { type: "json_schema", name: request.taskType, schema: resultSchema(request) } },
@@ -320,7 +323,9 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
         const needsWebSearch = request.taskType === "extract_source"
           || (request.taskType === "understand_input"
             && (/https?:\/\//i.test(`${request.input.rawInput} ${request.input.supplement}`)
-              || /当前|今日|热点|版本|最新/.test(`${request.input.rawInput} ${request.input.supplement}`)));
+              || /当前|今日|热点|版本|最新/.test(`${request.input.rawInput} ${request.input.supplement}`)))
+          || (request.taskType === "rewrite_fields"
+            && /技能|英雄|羁绊|阵容|新赛季|本赛季|当前版本|数值/u.test(`${request.input.suggestion} ${request.input.intentContext?.currentTitle || ""}`));
         if (needsWebSearch) {
           requestBody.tools = [{ type: "web_search" }];
           requestBody.tool_choice = "auto";

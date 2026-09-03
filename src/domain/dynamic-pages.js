@@ -518,10 +518,27 @@ function materializeEntity(entity, index, layoutStyle) {
   const traits = (entity.traits || []).join(" / ");
   const positionText = entity.positionLabel || "灵活位";
   const identity = `${entity.name}是${entity.cost || "?"}费${positionText}`;
+  const ability = String(entity.abilityDescription || "").trim();
+  const skillLead = entity.abilityName ? `技能“${entity.abilityName}”` : "技能作用";
   const roleDetailByPosition = {
-    front: `${identity}，主要任务是接住第一波伤害并给后排争取启动时间。看它时重点不是单卡名气，而是能否和现有前排连成一条稳定承伤线。`,
-    back: `${identity}，更需要安全输出位和完整启动条件。上场前先看装备能否匹配、第一轮技能会不会被打断，再决定要不要把资源集中给它。`,
-    flex: `${identity}，可以根据对手和来牌补输出、控制或保护。这个格子不用锁死，哪张牌能解决当前最明显的缺口，就先让谁上场。`,
+    front: [
+      `${identity}。${ability ? `${skillLead}：${ability}` : "它站第一排时，重点是接住开场火力，并替后排争取第一轮启动时间。"}`,
+      `${entity.name}更像前排承伤点。${ability ? `${skillLead}会${ability}` : "先看它能否扛住第一波，再决定要不要继续投入防装。"}`,
+      `把${entity.name}放进前排，不只是为了凑${traits || "羁绊"}。${ability ? `${skillLead}的实际效果是：${ability}` : "它需要和另一名坦位错开承伤，避免同时吃满范围伤害。"}`,
+      `${entity.name}负责把战斗时间往后拖。${ability ? `${skillLead}可以概括为：${ability}` : "对面爆发集中时让它对准火力，切后威胁高时则往主 C 一侧回收。"}`,
+    ],
+    back: [
+      `${identity}。${ability ? `${skillLead}：${ability}` : "它更吃安全输出位，先保证第一轮技能能稳定放出来。"}`,
+      `${entity.name}是后排输出思路。${ability ? `${skillLead}会${ability}` : "装备先解决启动或穿透缺口，再补纯面板会更顺。"}`,
+      `给${entity.name}留位置时，优先避开第一波控制。${ability ? `${skillLead}的重点是：${ability}` : "对手主 C 换边后，它的保护位也要一起移动。"}`,
+      `${entity.name}能不能打满，关键看输出环境。${ability ? `${skillLead}可以概括为：${ability}` : "如果总在启动前掉血，先改站位和保护关系，不要急着换第三件装备。"}`,
+    ],
+    flex: [
+      `${identity}。${ability ? `${skillLead}：${ability}` : "它可以根据对手补控制、输出或保护，不必固定在同一个格子。"}`,
+      `${entity.name}属于可以临场换位的拼图。${ability ? `${skillLead}会${ability}` : "哪一侧缺功能就往哪一侧补，优先解决当前最明显的短板。"}`,
+      `用${entity.name}时先看队伍缺口。${ability ? `${skillLead}的实际效果是：${ability}` : "对面切后多就偏保护，前排难处理就帮主 C 补控制或伤害链。"}`,
+      `${entity.name}不用死锁站位。${ability ? `${skillLead}可以概括为：${ability}` : "它跟着对手主力方向和己方保护关系移动，往往比照抄固定站位更实用。"}`,
+    ],
   };
   const entityTips = [
     `拿到${entity.name}时，顺手检查同费卡拥挤度，别为了追一张牌把经济搜空。`,
@@ -529,11 +546,17 @@ function materializeEntity(entity, index, layoutStyle) {
     `如果${entity.name}暂时没来，先用能继承它装备或补同类羁绊的棋子过渡。`,
     `${entity.name}的位置不是固定答案，对面主 C 换边或有切入时，记得同步调整保护关系。`,
   ];
+  const traitSuffixes = [
+    ` 它关联${traits}，换下它之前先确认核心档位会不会断。`,
+    ` ${traits}是它进阵容的连接点，替换时要找能接住相同功能的棋子。`,
+    ` 除了单卡作用，也要把${traits}的队友数量一起算进上场收益。`,
+    ` 它能补${traits}关系，但不要为了凑层数牺牲更急的控制或前排。`,
+  ];
   return {
     name: entity.name,
     detail: layoutStyle === "board"
       ? `${positionText} · ${traits || "根据阵容职责调整"}`
-      : `${roleDetailByPosition[entity.position] || roleDetailByPosition.flex}${traits ? ` 它关联${traits}羁绊，换人时记得一起检查层数有没有断。` : ""}`,
+      : `${(roleDetailByPosition[entity.position] || roleDetailByPosition.flex)[index % 4]}${traits ? traitSuffixes[index % traitSuffixes.length] : ""}`,
     example: layoutStyle === "board" ? `${entity.name}站${positionText}，实战按对手换边` : entityTips[index % entityTips.length],
     imageUrl: entity.imageUrl || "",
     cost: entity.cost || 0,
@@ -567,7 +590,7 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     featuredEntities: entities,
     contentKind: kind,
     layoutStyle: page.layoutStyle || "cards",
-    layoutVersion: 6,
+    layoutVersion: 7,
   };
   if (page.pageNo === 1) {
     return {

@@ -53,6 +53,7 @@ import {
   getEquipmentPageLayout,
   getRuleGridLayout,
   getTitleTextLayout,
+  splitText,
 } from "../src/domain/canvas-renderer.js";
 import {
   assessExportAudit,
@@ -349,6 +350,13 @@ test("高清标题保留完整可用宽度，避免文字叠成白块", () => {
     lineHeight: 78,
     maxLines: 2,
   });
+});
+
+test("高清画布换行不会让中文标点单独占一行", () => {
+  const context = { measureText: (value) => ({ width: Array.from(value).length * 10 }) };
+  assert.deepEqual(splitText(context, "这是一段说明。下一句", 60), ["这是一段说明。", "下一句"]);
+  assert.deepEqual(splitText(context, "先看（条件）再决定", 30), ["先看", "（条件）", "再决定"]);
+  assert.ok(splitText(context, "标题内容，继续", 40).every((line) => !/^[，。！？；：、]/u.test(line)));
 });
 
 test("装备卡正文与怎么选区域始终保留安全间距", () => {
