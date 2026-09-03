@@ -389,7 +389,7 @@ test("三张装备卡会根据长标题后的剩余空间自动缩放", () => {
   assert.ok(compact.contentBottom <= 1324);
 });
 
-test("规则卡会根据每段文字量生成不同高度并保持在安全区内", () => {
+test("同页规则卡保持统一高度和统一正文排版空间", () => {
   const items = [
     { name: "短项", detail: "一句简短说明。", example: "实战检查：先看条件。" },
     { name: "长项", detail: "这是一段更完整的判断说明，需要同时比较当前资源、目标功能、对手压力和下一阶段的行动顺序。", example: "实战检查：满足前提再执行，不满足就及时调整路线。" },
@@ -399,7 +399,8 @@ test("规则卡会根据每段文字量生成不同高度并保持在安全区�
   const layout = getRuleGridLayout(330, items);
 
   assert.equal(layout.cards.length, 4);
-  assert.ok(layout.cards[1].height > layout.cards[0].height);
+  assert.equal(layout.cards[1].height, layout.cards[0].height);
+  assert.equal(layout.cards[2].height, layout.cards[0].height);
   assert.ok(layout.contentBottom <= 1318);
   assert.equal(layout.cards[0].y, layout.cards[1].y);
   assert.ok(layout.cards[2].y > layout.cards[0].y);
@@ -408,7 +409,7 @@ test("规则卡会根据每段文字量生成不同高度并保持在安全区�
 test("成员较少时卡片会利用空白放大正文，成员较多时仍保持安全区", () => {
   const four = getRosterGridLayout(360, 4);
   const eight = getRosterGridLayout(360, 8);
-  assert.equal(four.cardHeight, 390);
+  assert.equal(four.cardHeight, 471);
   assert.ok(eight.cardHeight < four.cardHeight);
   assert.ok(four.contentBottom <= 1318);
   assert.ok(eight.contentBottom <= 1318);

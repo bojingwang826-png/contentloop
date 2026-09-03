@@ -736,12 +736,6 @@ function drawEquipmentCard(ctx, item, image, x, y, width, height, audit, itemInd
   }, audit, `${item.name}选择判断`);
 }
 
-function ruleItemScore(item = {}) {
-  return (Array.from(String(item.name || "")).length * 1.2)
-    + Array.from(String(item.detail || "")).length
-    + (Array.from(String(item.example || "")).length * 0.8);
-}
-
 export function getRuleGridLayout(bodyTop, items, options = {}) {
   const list = Array.isArray(items) && items.length ? items : [{}];
   const gap = Number(options.gap ?? 18);
@@ -751,16 +745,13 @@ export function getRuleGridLayout(bodyTop, items, options = {}) {
   const cards = [];
   for (let row = 0; row < rows; row += 1) {
     const rowItems = list.slice(row * 2, (row * 2) + 2);
-    const scores = rowItems.map(ruleItemScore);
-    const longest = Math.max(...scores, 1);
     rowItems.forEach((item, column) => {
-      const ratio = Math.max(0.84, Math.min(1, scores[column] / longest));
       cards.push({
         index: (row * 2) + column,
         row,
         column,
         y: bodyTop + (row * (rowSlot + gap)),
-        height: Math.max(230, Math.floor(rowSlot * (0.82 + (ratio * 0.18)))),
+        height: rowSlot,
       });
     });
   }
@@ -817,7 +808,7 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
     }, audit, `步骤 ${index + 1} 标题`);
 
     const cueHeight = item.example
-      ? (ultra ? 72 : dense ? 76 : Math.min(92, Math.max(78, height * 0.24)))
+      ? (ultra ? 94 : dense ? 100 : 108)
       : 0;
     const cueY = cueHeight ? y + height - cueHeight - padding : y + height - padding;
     const markerBottom = y + padding + markerSize;
@@ -829,10 +820,10 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
     ctx.fillStyle = colors.muted;
     drawFittedText(ctx, item.detail, x + padding, detailY, width - (padding * 2), detailHeight, {
       preferredSize: ultra ? 23 : dense ? 24 : 25,
-      minSize: 19,
+      minSize: ultra ? 23 : dense ? 24 : 25,
       weight: 500,
       lineFactor: 1.32,
-      maxLines: ultra ? 6 : 5,
+      maxLines: Infinity,
     }, audit, `步骤 ${index + 1} 解释`);
 
     if (cueHeight) {
@@ -841,17 +832,17 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
       const cueInset = ultra ? 14 : 18;
       drawVerticallyCenteredFittedText(ctx, item.example, x + padding + cueInset, cueY + 9, width - ((padding + cueInset) * 2), cueHeight - 18, {
         preferredSize: ultra ? 21 : dense ? 22 : 23,
-        minSize: 17,
+        minSize: ultra ? 21 : dense ? 22 : 23,
         weight: 600,
         lineFactor: 1.28,
-        maxLines: 2,
+        maxLines: Infinity,
       }, audit, `步骤 ${index + 1} 提醒`);
     }
 }
 
 function drawRosterCard(ctx, item, images, x, y, width, height, audit, index) {
   fillRounded(ctx, x, y, width, height, 25, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
-  const compact = height < 190;
+  const compact = height < 300;
   const portraitSize = compact ? Math.max(48, Math.min(62, height - 74)) : 84;
   const inset = compact ? 14 : 22;
   const copyX = x + inset + portraitSize + (compact ? 14 : 20);
@@ -867,7 +858,7 @@ function drawRosterCard(ctx, item, images, x, y, width, height, audit, index) {
   const detailTop = y + (compact ? 82 : 132);
   const detail = compact ? (item.traits.join(" / ") || item.detail) : item.detail || item.traits.join(" / ");
   drawFittedText(ctx, detail, x + inset, detailTop, width - (inset * 2), Math.max(24, height - (compact ? 92 : 146)), {
-    preferredSize: compact ? 18 : 23, minSize: compact ? 14 : 17, weight: 500, lineFactor: 1.3, maxLines: compact ? 2 : 5,
+    preferredSize: compact ? 18 : 23, minSize: compact ? 18 : 23, weight: 500, lineFactor: 1.3, maxLines: Infinity,
   }, audit, `成员 ${index + 1} 羁绊`);
 }
 
@@ -876,7 +867,7 @@ export function getRosterGridLayout(bodyTop, count) {
   const rows = Math.ceil(safeCount / 2);
   const gap = 16;
   const available = 1318 - bodyTop;
-  const cardHeight = Math.min(390, Math.floor((available - ((rows - 1) * gap)) / rows));
+  const cardHeight = Math.floor((available - ((rows - 1) * gap)) / rows);
   return {
     rows,
     gap,
@@ -1013,8 +1004,8 @@ function drawSideRule(ctx, model, images, audit) {
       preferredSize: 26, minSize: 20, weight: 800, lineFactor: 1.18, maxLines: 2,
     }, audit, `侧栏步骤 ${index + 1} 标题`);
     ctx.fillStyle = colors.muted;
-    drawFittedText(ctx, item.detail, cardX + 24, y + 92, cardWidth - 48, cardHeight - 108, {
-      preferredSize: 22, minSize: 18, weight: 500, lineFactor: 1.32, maxLines: 5,
+    drawFittedText(ctx, item.detail, cardX + 24, y + 84, cardWidth - 48, cardHeight - 96, {
+      preferredSize: 22, minSize: 22, weight: 500, lineFactor: 1.32, maxLines: Infinity,
     }, audit, `侧栏步骤 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
@@ -1051,7 +1042,7 @@ function drawChecklist(ctx, model, images, audit) {
     ctx.fillStyle = colors.text;
     drawFittedText(ctx, item.name, 150, y + 46, 828, 44, { preferredSize: 25, minSize: 20, weight: 800, lineFactor: 1.15, maxLines: 1 }, audit, `清单 ${index + 1} 标题`);
     ctx.fillStyle = colors.muted;
-    drawFittedText(ctx, item.detail, 150, y + 83, 828, cardHeight - 96, { preferredSize: 23, minSize: 19, weight: 500, lineFactor: 1.28, maxLines: 3 }, audit, `清单 ${index + 1} 正文`);
+    drawFittedText(ctx, item.detail, 150, y + 83, 828, cardHeight - 96, { preferredSize: 23, minSize: 23, weight: 500, lineFactor: 1.28, maxLines: Infinity }, audit, `清单 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
   audit.contentBottom = bodyTop + available;
