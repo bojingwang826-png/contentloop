@@ -330,6 +330,93 @@ function drawHeroStrip(ctx, entities, images, x, y, width, height, audit) {
   });
 }
 
+function drawCoverHeroCollage(ctx, entities, images, x, y, width, height, audit) {
+  const list = entities.filter((entity) => images.get(`remote:${entity.imageUrl}`));
+  if (!list.length) return false;
+  fillRounded(ctx, x, y, width, height, 26, colors.surface, "rgba(242,200,98,.28)");
+  ctx.save();
+  roundedPath(ctx, x + 3, y + 3, width - 6, height - 6, 23);
+  ctx.clip();
+
+  const backdrop = list.slice(0, Math.min(4, list.length));
+  const tileWidth = width / backdrop.length;
+  ctx.save();
+  ctx.filter = "blur(22px) saturate(.9) brightness(.58)";
+  ctx.globalAlpha = 0.92;
+  backdrop.forEach((entity, index) => {
+    const image = images.get(`remote:${entity.imageUrl}`);
+    const scale = Math.max((tileWidth + 48) / image.naturalWidth, (height + 48) / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    const tileX = x + (index * tileWidth);
+    ctx.drawImage(image, tileX + ((tileWidth - drawWidth) / 2), y + ((height - drawHeight) / 2), drawWidth, drawHeight);
+  });
+  ctx.restore();
+  const shade = ctx.createLinearGradient(x, y, x, y + height);
+  shade.addColorStop(0, "rgba(18,10,42,.28)");
+  shade.addColorStop(1, "rgba(18,10,42,.84)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(x, y, width, height);
+
+  if (list.length === 1) {
+    const image = images.get(`remote:${list[0].imageUrl}`);
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    ctx.drawImage(image, x + ((width - drawWidth) / 2), y + ((height - drawHeight) / 2), drawWidth, drawHeight);
+    const singleShade = ctx.createLinearGradient(0, y + (height * 0.42), 0, y + height);
+    singleShade.addColorStop(0, "rgba(13,10,24,0)");
+    singleShade.addColorStop(1, "rgba(13,10,24,.92)");
+    ctx.fillStyle = singleShade;
+    ctx.fillRect(x, y, width, height);
+    ctx.fillStyle = colors.text;
+    ctx.textAlign = "center";
+    setFont(ctx, 28, 800);
+    ctx.fillText(list[0].name, x + (width / 2), y + height - 30);
+    ctx.textAlign = "left";
+    ctx.restore();
+    return true;
+  }
+
+  const rows = list.length <= 5
+    ? [list]
+    : [list.slice(0, Math.ceil(list.length / 2)), list.slice(Math.ceil(list.length / 2))];
+  const maxColumns = Math.max(...rows.map((row) => row.length));
+  const portrait = Math.max(64, Math.min(rows.length === 1 ? 112 : 94, Math.floor((width - 90) / maxColumns) - 14));
+  const rowGap = rows.length === 1 ? 0 : 24;
+  const blockHeight = (rows.length * (portrait + 30)) + rowGap;
+  const startY = y + ((height - blockHeight) / 2);
+  rows.forEach((row, rowIndex) => {
+    const gap = Math.max(14, Math.min(30, (width - (row.length * portrait) - 64) / Math.max(1, row.length - 1)));
+    const rowWidth = (row.length * portrait) + (Math.max(0, row.length - 1) * gap);
+    const stagger = rows.length > 1 && rowIndex === 1 ? Math.min(22, (width - rowWidth) / 4) : 0;
+    const startX = x + ((width - rowWidth) / 2) + stagger;
+    row.forEach((entity, index) => {
+      const px = startX + (index * (portrait + gap));
+      const py = startY + (rowIndex * (portrait + 30 + rowGap)) + ((index % 2) * 8);
+      ctx.save();
+      ctx.shadowColor = "rgba(7,4,18,.55)";
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 8;
+      drawHeroPortrait(ctx, images, entity, px, py, portrait, audit, "封面英雄");
+      ctx.restore();
+      ctx.fillStyle = colors.text;
+      ctx.textAlign = "center";
+      drawFittedText(ctx, entity.name, px + (portrait / 2), py + portrait + 23, portrait + 28, 25, {
+        preferredSize: 17, minSize: 12, weight: 800, lineFactor: 1.1, maxLines: 1,
+      }, audit, `${entity.name}封面名称`);
+      ctx.textAlign = "left";
+    });
+  });
+  ctx.restore();
+  return true;
+}
+
+function contentVisualFit(model) {
+  if (model.heroEntities?.length === 1) return "cover";
+  return model.visual?.kind === "official" ? "smart" : "cover";
+}
+
 function drawBackground(ctx, model) {
   const gradient = ctx.createLinearGradient(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
   gradient.addColorStop(0, model.type === "cover" ? "#120a2c" : colors.canvas);
@@ -470,7 +557,7 @@ function drawCover(ctx, model, images, audit) {
   const cardY = 565;
   fillRounded(ctx, 64, cardY, 952, 375, 36, "rgba(38,24,63,.74)", "rgba(242,200,98,.28)");
   if (model.heroEntities?.length) {
-    drawHeroStrip(ctx, model.heroEntities, images, 82, cardY + 18, 916, 339, audit);
+    drawCoverHeroCollage(ctx, model.heroEntities, images, 82, cardY + 18, 916, 339, audit);
   } else if (model.visual) {
     drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 82, cardY + 18, 916, 339, 26, model.visual.kind === "official" ? "contain" : "cover");
   } else {
@@ -877,7 +964,7 @@ function drawSideRule(ctx, model, images, audit) {
   const hasVisual = Boolean(model.visual);
   const visualWidth = hasVisual ? 340 : 0;
   if (hasVisual) {
-    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, visualWidth, panelHeight, 28, "smart");
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, visualWidth, panelHeight, 28, contentVisualFit(model));
   }
   const cardX = hasVisual ? 424 : 64;
   const cardWidth = hasVisual ? 592 : 952;
@@ -912,7 +999,7 @@ function drawChecklist(ctx, model, images, audit) {
     drawLineupBanner(ctx, model.heroEntities, images, 64, bodyTop, 952, 236, audit);
     bodyTop += 254;
   } else if (model.visual) {
-    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, 220, 28, "smart");
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, 220, 28, contentVisualFit(model));
     bodyTop += 238;
   }
   const count = Math.min(4, model.items.length);
@@ -955,7 +1042,7 @@ function drawRule(ctx, model, images, audit) {
       : density === "dense"
         ? 190
         : bodyTop > 410 ? 188 : 220;
-    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, illustrationHeight, 28, model.visual.kind === "official" ? "contain" : "cover");
+    drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, 952, illustrationHeight, 28, contentVisualFit(model));
     bodyTop += illustrationHeight + 18;
   }
   const width = 467;

@@ -105,6 +105,7 @@ const defaultState = {
   outlineEditingPageNo: 0,
   outlineEditorDraft: null,
   outlineEditError: "",
+  outlineRewriteSuggestion: "换一种更自然、更具体的表达，保留本页重点",
   pages: project.pages.map((page) => ({ ...page, preservedFields: [], manualOrder: [] })),
   currentPageId: project.pages[0].id,
   history: emptyHistory(),
@@ -165,7 +166,7 @@ window.addEventListener("beforeunload", clearExportArtifacts);
 function upgradeDynamicPageLayout(stored) {
   const storedPages = Array.isArray(stored?.pages) ? stored.pages : [];
   if (stored?.contentSource !== "dynamic" || !stored.customProject?.outline) return storedPages;
-  if (storedPages.length === 7 && storedPages.every((page) => page.layoutVersion >= 5)) return storedPages;
+  if (storedPages.length === 7 && storedPages.every((page) => page.layoutVersion >= 6)) return storedPages;
   try {
     const fresh = materializeDynamicProject(stored.customProject).pages;
     return fresh.map((freshPage, index) => {
@@ -743,6 +744,56 @@ function beginOutlineEdit(page, dynamic = false) {
     keyPointsText: dynamic ? (page.keyPoints || []).join("\n") : "",
   };
   state.outlineEditError = "";
+  state.outlineRewriteSuggestion = "换一种更自然、更具体的表达，保留本页重点";
+}
+
+function outlineDraftAsEditablePage(pageNo, draft) {
+  const keyPoints = String(draft?.keyPointsText || "").split(/\r?\n/u).map((item) => item.trim()).filter(Boolean);
+  return {
+    id: `outline-draft-${pageNo}`,
+    pageNo,
+    kicker: draft?.kicker || "",
+    title: draft?.title || "",
+    subtitle: draft?.summary || "",
+    locked: false,
+    preservedFields: [],
+    blocks: [{
+      kind: "steps",
+      items: keyPoints.map((detail, index) => ({ name: `页面要点 ${index + 1}`, detail })),
+    }],
+  };
+}
+
+async function rewriteOutlineDraftWithAi() {
+  const pageNo = state.outlineEditingPageNo;
+  const draft = state.outlineEditorDraft;
+  const suggestion = state.outlineRewriteSuggestion.trim();
+  if (!pageNo || !draft || !suggestion || state.aiBusy) return;
+  const editablePage = outlineDraftAsEditablePage(pageNo, draft);
+  const request = createRewriteFieldsRequest(editablePage, suggestion);
+  state.aiBusy = true;
+  state.aiTaskMessage = `正在重写第 ${pageNo} 页大纲…`;
+  render();
+  try {
+    const response = await runAiTask(request, { page: editablePage });
+    const rewritten = applyRewriteFieldsResponse([editablePage], request, response)[0];
+    state.outlineEditorDraft = {
+      kicker: rewritten.kicker,
+      title: rewritten.title,
+      summary: rewritten.subtitle,
+      keyPointsText: (rewritten.blocks?.[0]?.items || []).map((item) => item.detail).filter(Boolean).join("\n"),
+    };
+    state.outlineRewriteSuggestion = "";
+    state.aiBusy = false;
+    state.aiTaskMessage = "";
+    render();
+    showToast(`${aiProviderName(response)} 已重写第 ${pageNo} 页大纲，请确认后保存`);
+  } catch (error) {
+    state.aiBusy = false;
+    state.aiTaskMessage = "";
+    render();
+    showToast(error instanceof Error ? error.message : "AI 重写失败，原大纲内容已保留");
+  }
 }
 
 function outlineEditForm(page, dynamic = false) {
@@ -757,6 +808,12 @@ function outlineEditForm(page, dynamic = false) {
       <label class="outline-title-field">页面标题<span>这一页最重要的一句话</span><textarea data-field="outlineTitle" rows="2" maxlength="64">${escapeHtml(draft.title)}</textarea></label>
       <label class="outline-wide-field">页面说明<span>说明这一页要解决什么问题</span><textarea data-field="outlineSummary" rows="2" maxlength="120">${escapeHtml(draft.summary)}</textarea></label>
       ${dynamic ? `<label class="outline-wide-field">页面要点<span>每行一条，保留 2～4 条</span><textarea data-field="outlineKeyPoints" rows="4" maxlength="320">${escapeHtml(draft.keyPointsText)}</textarea></label>` : ""}
+    </div>
+    <div class="outline-ai-rewrite">
+      <div><strong>${icon("refresh")}AI 重写这页</strong><span>只改当前页草稿，确认满意后再保存</span></div>
+      <label class="sr-only" for="outline-rewrite-${page.pageNo}">第 ${page.pageNo} 页 AI 重写意见</label>
+      <textarea id="outline-rewrite-${page.pageNo}" rows="2" data-field="outlineRewriteSuggestion" placeholder="例如：更像朋友分享，加入具体判断条件">${escapeHtml(state.outlineRewriteSuggestion)}</textarea>
+      <button class="button secondary" type="button" data-action="rewrite-outline-page" ${state.aiBusy || !state.outlineRewriteSuggestion.trim() ? "disabled" : ""} aria-busy="${state.aiBusy}">${icon("refresh")}${state.aiBusy ? escapeHtml(state.aiTaskMessage || "AI 正在处理…") : "AI 重写当前页"}</button>
     </div>
     <div class="outline-edit-actions"><button class="button ghost" type="button" data-action="cancel-outline-edit">取消</button><button class="button primary" type="submit">保存这一页</button></div>
   </form>`;
@@ -2106,6 +2163,14 @@ app.addEventListener("click", (event) => {
     saveState();
     render();
   }
+  if (action === "rewrite-outline-page") {
+    if (!state.outlineRewriteSuggestion.trim()) {
+      showToast("请先输入一句重写意见");
+      document.querySelector('[data-field="outlineRewriteSuggestion"]')?.focus();
+      return;
+    }
+    void rewriteOutlineDraftWithAi();
+  }
   if (action === "confirm-dynamic-outline") {
     if (!state.customProject?.outline) return;
     if (state.customProject.outlineConfirmed && state.contentSource === "dynamic") {
@@ -2473,6 +2538,11 @@ app.addEventListener("input", (event) => {
     }[field];
     state.outlineEditorDraft[property] = event.target.value;
     state.outlineEditError = "";
+  }
+  if (field === "outlineRewriteSuggestion") {
+    state.outlineRewriteSuggestion = event.target.value;
+    const button = document.querySelector('[data-action="rewrite-outline-page"]');
+    if (button) button.disabled = state.aiBusy || !state.outlineRewriteSuggestion.trim();
   }
   if (["sourceTitle", "sourceAuthor", "sourcePublishedAt", "sourceExcerpt"].includes(field)) {
     const property = {

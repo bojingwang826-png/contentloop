@@ -2195,6 +2195,50 @@ details div {
   grid-column: 1 / -1;
 }
 
+.outline-ai-rewrite {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(320px, 1.4fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgb(242 200 98 / 24%);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgb(242 200 98 / 8%), rgb(109 76 145 / 10%));
+}
+
+.outline-ai-rewrite > div {
+  display: grid;
+  align-self: center;
+  gap: 4px;
+}
+
+.outline-ai-rewrite strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.outline-ai-rewrite strong .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.outline-ai-rewrite span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.outline-ai-rewrite textarea {
+  min-height: 68px;
+}
+
+.outline-ai-rewrite .button {
+  min-width: 154px;
+  min-height: 48px;
+}
+
 .outline-edit-actions {
   display: flex;
   justify-content: flex-end;
@@ -4878,6 +4922,14 @@ details div {
 
   .outline-edit-grid > label {
     grid-column: 1;
+  }
+
+  .outline-ai-rewrite {
+    grid-template-columns: 1fr;
+  }
+
+  .outline-ai-rewrite .button {
+    width: 100%;
   }
 
   .page-no {

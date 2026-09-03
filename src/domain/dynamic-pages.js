@@ -195,7 +195,8 @@ function planPageVisuals(pages, topic, kind) {
     ? topic.media.filter((item) => /^https:\/\/(?:ddragon\.leagueoflegends\.com|raw\.communitydragon\.org)\//i.test(String(item?.source || "")))
     : [];
   if (liveMedia.length) {
-    const targetPages = pages.filter((page) => page.pageNo >= 3 && page.layoutStyle !== "board");
+    const eligible = pages.filter((page) => page.pageNo >= 3 && page.layoutStyle !== "board");
+    const targetPages = eligible.filter((_, index) => index % 2 === 0).slice(0, Math.min(3, liveMedia.length));
     targetPages.forEach((page, index) => {
       const media = liveMedia[index % liveMedia.length];
       planned.set(page.pageNo, {
@@ -203,7 +204,6 @@ function planPageVisuals(pages, topic, kind) {
         reason: media.reason || `“${String(page.title || topic.title).slice(0, 18)}”使用该题涉及的当前赛季真实素材`,
       });
     });
-    return planned;
   }
   if (kind === "equipment") {
     planned.set(3, visualRecord("roadmap", pages[2], topic));
@@ -223,6 +223,7 @@ function planPageVisuals(pages, topic, kind) {
   const usedThemes = new Set([coverTheme]);
 
   pages.slice(1).forEach((page) => {
+    if (planned.has(page.pageNo)) return;
     const ranked = rankedThemes(page, topic).map((candidate) => candidate.name);
     const preferred = roleThemes[page.role] || ["roadmap", "tradeoff", "branching"];
     const theme = [...preferred, ...ranked, ...Object.keys(illustrationThemes)]
@@ -333,6 +334,22 @@ function specificStepCopy(page, point, index, kind) {
     `${subject}要把确定信息和玩家体感分开。公告里的改动可以直接说明，强度判断则要结合当前赛季、发布时间和多场对局反馈，别把一两局顺风写成人人可复制的结论。`,
     `写${subject}前再看一眼版本号和更新时间，旧赛季截图最容易把读者带偏。`,
   );
+  if (/(判断顺序|三步|先看条件)/u.test(signal)) return copy(
+    `真到对局里不用背长篇攻略，按“先看手里的牌和装备、再找当前最缺的功能、最后决定花不花钱”走一遍就够了。顺序固定，答案可以跟着来牌变化。`,
+    `如果一回合想同时换阵、换装备又大搜，先停一下，只解决最影响战力的那件事。`,
+  );
+  if (/(短板|最缺|止血)/u.test(signal)) return copy(
+    `当前最缺什么，要从战斗里找：前排两秒就倒是坦度问题，主 C 没启动是装备或站位问题，打到加时还收不掉才是伤害问题。先补最明显的一块，提升通常更直接。`,
+    `输一轮后别只看伤害榜，回放前五秒，谁先倒、谁没放出技能，答案基本就在这里。`,
+  );
+  if (/(条件分支|留后路|备选)/u.test(signal)) return copy(
+    `攻略最好记成两条路：关键牌和装备都顺就往上限走；条件差一截，就保住能接装备的打工牌和已两星前排。这样下一轮来什么，都不至于把自己卡死。`,
+    `备选不是“随便换一套”，而是提前留好能接装备、能补羁绊、不会拖经济的连接牌。`,
+  );
+  if (/(评论|交流|补充经验)/u.test(signal)) return copy(
+    `发出去时可以把问题问得具体一点：你是在哪个阶段卡住、遇到什么阵容、手里缺哪张牌。这样的评论更容易补出有用的对局细节，也方便下一篇继续拆。`,
+    `比起问“这套强不强”，更建议问“少哪张牌还能玩、什么情况该换边”，答案会实用很多。`,
+  );
 
   const detailFallbacks = {
     problem: `“${pageFocus}”里碰到${subject}先别急着套答案，把当时的来牌、装备和血量记下来。很多时候不是阵容不能玩，而是动手太早，或者把两个不同的问题混在了一起。`,
@@ -375,6 +392,36 @@ function entityNames(entities, position = "") {
 
 function joinNames(names, fallback = "根据本局来牌灵活调整") {
   return names.length ? names.join("、") : fallback;
+}
+
+function closingKeyPoints(kind, entities, traitName) {
+  const core = entities.find((item) => Number(item.cost) >= 4) || entities[0];
+  const front = entities.find((item) => item.position === "front") || entities[0];
+  const back = entities.find((item) => item.position === "back") || core;
+  if (kind === "hero" && core) return [
+    `主 C 启动：${core.name}先看能否安全放出第一轮技能，再补纯伤害`,
+    `前排时间：${front?.name || "主坦"}至少要替后排接住第一波集火`,
+    `没来时的备选：保留能继承${core.name}装备和职责的过渡棋子`,
+    `复盘重点：观察${core.name}是没启动、打不动，还是目标选错`,
+  ];
+  if (["trait", "lineup"].includes(kind)) return [
+    `羁绊档位：先确认${traitName}多开一档是否真的换来关键效果`,
+    `输出环境：让${back?.name || "主输出"}避开第一波控制，装备先补启动缺口`,
+    `站位换边：用${front?.name || "主坦"}接核心火力，后排跟着对手主 C 调整`,
+    `缺成员时留后路：优先保住两星前排和能继承装备的连接牌`,
+  ];
+  if (kind === "positioning") return [
+    `先看威胁方向：主 C 避开切入和第一波范围控制`,
+    `再摆承伤关系：主坦接火力，副坦保护侧翼而不是挤成一团`,
+    `最后几秒只动关键位：整队乱换最容易把保护链拆散`,
+    `复盘前五秒：记住谁先倒、谁没启动，下轮只改一个位置`,
+  ];
+  return [
+    "判断顺序：先看现有条件，再补当前短板，最后比较方案代价",
+    "止血优先：连续掉血时先做能立刻提升场面的选择",
+    "保留条件分支：准备一条能继承装备和羁绊的备选路线",
+    "版本内容单独核验：发布前再看公告日期和赛季信息",
+  ];
 }
 
 function enrichPage(page, patch) {
@@ -453,6 +500,12 @@ export function enrichOutlineWithGameData(outline, topic) {
       assetNeeds: ["与本页判断条件对应的当前赛季素材"],
     });
     if (page.pageNo === 7) return enrichPage(page, {
+      kicker: "最后带走",
+      title: kind === "hero" && entities[0] ? `${entities[0].name}实战前的四句提醒` : `${traitName}收藏前再看这四点`,
+      summary: kind === "hero" && entities[0]
+        ? `不背固定答案，把${entities[0].name}的启动、保护、备选和复盘拆开看。`
+        : `把${traitName}压缩成四个能在对局里直接检查的动作，来牌变了也有调整空间。`,
+      keyPoints: closingKeyPoints(kind, entities, traitName),
       layoutStyle: "checklist",
       assetNeeds: ["便于收藏复核的主题素材"],
     });
@@ -514,7 +567,7 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
     featuredEntities: entities,
     contentKind: kind,
     layoutStyle: page.layoutStyle || "cards",
-    layoutVersion: 5,
+    layoutVersion: 6,
   };
   if (page.pageNo === 1) {
     return {
