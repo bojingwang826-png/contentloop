@@ -12,8 +12,9 @@ import {
   validateAiTaskResponse,
 } from "../src/domain/ai-contract.js";
 import { runMockAiTask } from "../src/domain/mock-ai-provider.js";
-import { runAiTask } from "../src/services/ai-client.js";
+import { clearAiAccessCode, runAiTask, setAiAccessCode } from "../src/services/ai-client.js";
 import { createAiService } from "../scripts/ai-service.mjs";
+import worker from "../worker/index.js";
 
 function pageFixture() {
   const page = structuredClone(sampleProject.pages[2]);
@@ -265,6 +266,39 @@ test("静态托管没有 AI 接口时不会把演示规则冒充成真实重写"
     () => runAiTask(request, { page }, async () => ({ status: 404 })),
     /尚未连接在线 AI|真实重写/u,
   );
+});
+
+test("浏览器只在 AI 请求头中发送本次会话访问码", async () => {
+  const request = createPublishCopyRequest(sampleProject.exportCopy.body, "更自然一点", "access-header");
+  const result = runMockAiTask(request);
+  let sentOptions;
+  setAiAccessCode("session-code-123");
+  try {
+    await runAiTask(request, {}, async (_url, options) => {
+      sentOptions = options;
+      return { ok: true, status: 200, json: async () => result };
+    });
+  } finally {
+    clearAiAccessCode();
+  }
+  assert.equal(sentOptions.headers["x-ai-access-code"], "session-code-123");
+  assert.equal(sentOptions.body.includes("session-code-123"), false);
+});
+
+test("线上 Worker 在调用付费模型前校验 AI 访问码", async () => {
+  const env = { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test", AI_ACCESS_CODE: "right-code" };
+  const statusResponse = await worker.fetch(new Request("https://example.com/api/ai/status"), env);
+  const status = await statusResponse.json();
+  assert.equal(status.mode, "live");
+  assert.equal(status.accessRequired, true);
+
+  const denied = await worker.fetch(new Request("https://example.com/api/ai/tasks", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-ai-access-code": "wrong-code" },
+    body: JSON.stringify({ taskType: "rewrite_fields" }),
+  }), env);
+  assert.equal(denied.status, 401);
+  assert.equal((await denied.json()).code, "AI_ACCESS_DENIED");
 });
 
 test("未配置 API Key 时服务端拒绝伪装成 AI 的字段重写", async () => {

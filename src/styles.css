@@ -3856,13 +3856,68 @@ details div {
   background: rgb(29 21 48 / 56%);
 }
 
+.ai-mode-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-mode-summary > span {
+  display: grid;
+  gap: 2px;
+}
+
+.ai-mode-inline.has-access-control {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(360px, auto);
+  gap: 12px;
+}
+
+.ai-access-control {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 240px) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-access-control label {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-access-control input {
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  color: var(--text-primary);
+  background: rgb(17 12 31 / 70%);
+}
+
+.ai-access-control input:focus {
+  border-color: var(--success);
+  outline: 2px solid rgb(117 213 162 / 18%);
+}
+
+.ai-access-control .button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.outline-ai-rewrite > .ai-mode-inline {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .ai-mode-inline .icon {
   width: 17px;
   height: 17px;
   color: var(--accent);
 }
 
-.ai-mode-inline > span {
+.ai-mode-inline > span,
+.ai-mode-summary > span {
   display: grid;
   gap: 2px;
 }
@@ -4524,6 +4579,15 @@ details div {
 }
 
 @media (max-width: 820px) {
+  .ai-mode-inline.has-access-control,
+  .ai-access-control {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-access-control .button,
+  .ai-access-control input {
+    width: 100%;
+  }
   .dynamic-boundary-grid {
     grid-template-columns: 1fr;
   }

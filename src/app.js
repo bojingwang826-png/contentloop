@@ -63,7 +63,7 @@ import {
   screenshotCategoryOptions,
   screenshotInputContext,
 } from "./domain/screenshot-ocr.js";
-import { getAiRuntimeStatus, researchGameTopic, runAiTask } from "./services/ai-client.js";
+import { clearAiAccessCode, getAiRuntimeStatus, researchGameTopic, runAiTask, setAiAccessCode } from "./services/ai-client.js";
 import { extractPublicSource } from "./services/source-client.js";
 import { createLowResolutionPreview, recognizeScreenshot } from "./services/screenshot-ocr-client.js";
 
@@ -143,6 +143,17 @@ const defaultState = {
 };
 
 let state = loadState();
+let aiAccessCodeDraft = "";
+let aiAccessCodeSet = false;
+try {
+  const savedAccessCode = sessionStorage.getItem("chanyou-ai-access-code") || "";
+  if (savedAccessCode) {
+    setAiAccessCode(savedAccessCode);
+    aiAccessCodeSet = true;
+  }
+} catch {
+  // Session storage can be unavailable in strict privacy modes; the in-memory code still works.
+}
 let exportArtifacts = {
   fingerprint: "",
   pages: [],
@@ -363,7 +374,7 @@ function shell(route, content) {
 
 function renderAiStatusBadge() {
   const mode = state.aiStatus?.mode || "checking";
-  const label = mode === "live" ? "在线 AI" : mode === "demo" ? "演示 AI" : "检查 AI";
+  const label = mode === "live" ? (state.aiStatus?.accessRequired ? "在线 AI · 已保护" : "在线 AI") : mode === "demo" ? "演示 AI" : "检查 AI";
   const detail = mode === "live"
     ? `${state.aiStatus.model} · 结构化输出`
     : mode === "demo"
@@ -374,7 +385,11 @@ function renderAiStatusBadge() {
 
 function renderAiModeInline() {
   const live = state.aiStatus?.mode === "live";
-  return `<div class="ai-mode-inline ${live ? "is-live" : "is-demo"}" role="status">${icon(live ? "check" : "shield")}<span><strong>${live ? `在线模型 · ${escapeHtml(state.aiStatus.model)}` : "演示模式"}</strong><small>${live ? "返回内容会先通过字段白名单和结构检查" : "使用确定性规则，不产生 API 费用"}</small></span></div>`;
+  const protectedAi = live && state.aiStatus?.accessRequired;
+  return `<div class="ai-mode-inline ${live ? "is-live" : "is-demo"} ${protectedAi ? "has-access-control" : ""}" role="status">
+    <div class="ai-mode-summary">${icon(live ? "check" : "shield")}<span><strong>${live ? `在线模型 · ${escapeHtml(state.aiStatus.model)}` : "演示模式"}</strong><small>${live ? "返回内容会先通过字段白名单和结构检查" : "使用确定性规则，不产生 API 费用"}</small></span></div>
+    ${protectedAi ? `<div class="ai-access-control"><label for="ai-access-code">AI 访问码</label><input id="ai-access-code" type="password" data-field="aiAccessCode" value="" placeholder="${aiAccessCodeSet ? "本次会话已解锁" : "输入后解锁真实 AI"}" autocomplete="off" /><button class="button secondary" type="button" data-action="save-ai-access-code" ${!aiAccessCodeDraft.trim() ? "disabled" : ""}>${aiAccessCodeSet ? "更新访问码" : "解锁 AI"}</button>${aiAccessCodeSet ? `<button class="link-button" type="button" data-action="clear-ai-access-code">清除</button>` : ""}</div>` : ""}
+  </div>`;
 }
 
 function pageHeader(eyebrow, title, description, side = "") {
@@ -829,6 +844,7 @@ function outlineEditForm(page, dynamic = false) {
       <label class="sr-only" for="outline-rewrite-${page.pageNo}">第 ${page.pageNo} 页 AI 重写意见</label>
       <textarea id="outline-rewrite-${page.pageNo}" rows="2" data-field="outlineRewriteSuggestion" placeholder="例如：更像朋友分享，加入具体判断条件">${escapeHtml(state.outlineRewriteSuggestion)}</textarea>
       <button class="button secondary" type="button" data-action="rewrite-outline-page" ${state.aiBusy || !state.outlineRewriteSuggestion.trim() ? "disabled" : ""} aria-busy="${state.aiBusy}">${icon("refresh")}${state.aiBusy ? escapeHtml(state.aiTaskMessage || "AI 正在处理…") : "AI 重写当前页"}</button>
+      ${renderAiModeInline()}
     </div>
     <div class="outline-edit-actions"><button class="button ghost" type="button" data-action="cancel-outline-edit">取消</button><button class="button primary" type="submit">保存这一页</button></div>
   </form>`;
@@ -2016,6 +2032,31 @@ app.addEventListener("click", (event) => {
   if (!target) return;
   const { action, id, value, versionId, fieldKey, index, direction } = target.dataset;
 
+  if (action === "save-ai-access-code") {
+    const code = aiAccessCodeDraft.trim();
+    if (!code) {
+      showToast("请先输入 AI 访问码");
+      document.querySelector('[data-field="aiAccessCode"]')?.focus();
+      return;
+    }
+    setAiAccessCode(code);
+    aiAccessCodeSet = true;
+    aiAccessCodeDraft = "";
+    try { sessionStorage.setItem("chanyou-ai-access-code", code); } catch { /* Keep it in memory. */ }
+    render();
+    showToast("真实 AI 已为本次浏览会话解锁");
+    return;
+  }
+  if (action === "clear-ai-access-code") {
+    clearAiAccessCode();
+    aiAccessCodeSet = false;
+    aiAccessCodeDraft = "";
+    try { sessionStorage.removeItem("chanyou-ai-access-code"); } catch { /* Already cleared in memory. */ }
+    render();
+    showToast("AI 访问码已从本次会话清除");
+    return;
+  }
+
   if (action === "analyze-source-input") {
     if (!state.sourceInput.trim()) {
       showToast("请先输入一句灵感或一个公开网页链接");
@@ -2531,6 +2572,12 @@ app.addEventListener("focusin", (event) => {
 app.addEventListener("input", (event) => {
   const field = event.target.dataset.field;
   if (!field) return;
+  if (field === "aiAccessCode") {
+    aiAccessCodeDraft = event.target.value;
+    const button = event.target.closest(".ai-access-control")?.querySelector('[data-action="save-ai-access-code"]');
+    if (button) button.disabled = !aiAccessCodeDraft.trim();
+    return;
+  }
   if (field === "accountName") {
     state.accountName = event.target.value;
   }

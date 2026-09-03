@@ -17,6 +17,27 @@ function json(payload, status = 200) {
   });
 }
 
+function accessCodeMatches(provided, expected) {
+  const left = new TextEncoder().encode(String(provided || ""));
+  const right = new TextEncoder().encode(String(expected || ""));
+  let difference = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    difference |= (left[index] || 0) ^ (right[index] || 0);
+  }
+  return difference === 0;
+}
+
+function requireAiAccess(request, env) {
+  const expected = String(env.AI_ACCESS_CODE || "").trim();
+  if (!expected) {
+    throw Object.assign(new Error("在线 AI 访问保护尚未配置，暂时不能执行付费生成"), { statusCode: 503 });
+  }
+  if (!accessCodeMatches(request.headers.get("x-ai-access-code"), expected)) {
+    throw Object.assign(new Error("AI 访问码不正确，请重新输入后再试；原内容没有变化"), { statusCode: 401 });
+  }
+}
+
 async function readJson(request) {
   const raw = await request.text();
   if (new TextEncoder().encode(raw).byteLength > MAX_JSON_BYTES) {
@@ -235,10 +256,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/api/ai/status") {
-      return json(aiService(env).status());
+      return json({
+        ...aiService(env).status(),
+        accessRequired: Boolean(env.OPENAI_API_KEY && env.AI_ACCESS_CODE),
+        accessProtected: Boolean(env.AI_ACCESS_CODE),
+      });
     }
     if (request.method === "POST" && url.pathname === "/api/ai/tasks") {
       try {
+        if (env.OPENAI_API_KEY) requireAiAccess(request, env);
         const payload = await readJson(request);
         const result = await aiService(env).run(payload, {
           clientId: request.headers.get("cf-connecting-ip") || "online-demo",
@@ -246,7 +272,7 @@ export default {
         return json(result);
       } catch (error) {
         return json({
-          code: error?.statusCode === 429 ? "AI_RATE_LIMITED" : "AI_TASK_FAILED",
+          code: error?.statusCode === 401 ? "AI_ACCESS_DENIED" : error?.statusCode === 429 ? "AI_RATE_LIMITED" : "AI_TASK_FAILED",
           message: error instanceof Error ? error.message : "AI 任务失败，旧内容已保留",
         }, error?.statusCode || 500);
       }

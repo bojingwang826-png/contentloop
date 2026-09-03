@@ -2,6 +2,15 @@ import { runMockAiTask } from "../domain/mock-ai-provider.js";
 import { validateAiTaskResponse } from "../domain/ai-contract.js";
 
 const liveOnlyTasks = new Set(["rewrite_fields"]);
+let aiAccessCode = "";
+
+export function setAiAccessCode(value) {
+  aiAccessCode = String(value || "").trim();
+}
+
+export function clearAiAccessCode() {
+  aiAccessCode = "";
+}
 
 function liveAiRequiredMessage() {
   return "当前网站尚未连接在线 AI，已停止使用演示改写。连接在线模型后，AI 才会按你的标题和修改要求真实重写；原内容没有变化。";
@@ -24,9 +33,11 @@ export async function getAiRuntimeStatus(fetchImpl = globalThis.fetch) {
 
 export async function runAiTask(request, context = {}, fetchImpl = globalThis.fetch) {
   try {
+    const headers = { "content-type": "application/json", accept: "application/json" };
+    if (aiAccessCode) headers["x-ai-access-code"] = aiAccessCode;
     const response = await fetchImpl("/api/ai/tasks", {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
+      headers,
       body: JSON.stringify(request),
     });
     if (response.status === 404) {
