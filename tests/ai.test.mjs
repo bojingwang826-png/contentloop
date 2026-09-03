@@ -106,7 +106,13 @@ test("在线输入理解启用网页检索并保持结构化输出", async () =>
   const response = await service.run(request, { clientId: "understand-user" });
   assert.equal(sentBody.tools[0].type, "web_search");
   assert.equal(sentBody.text.format.type, "json_schema");
+  assert.equal(sentBody.reasoning.effort, "none");
   assert.equal(response.result.topics.length, 5);
+});
+
+test("未指定模型时默认使用极速版 DeepSeek V4 Flash", () => {
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test-key" } });
+  assert.equal(service.status().model, "deepseek-v4-flash");
 });
 
 test("纯灵感输入不会无故启用付费网页检索", async () => {

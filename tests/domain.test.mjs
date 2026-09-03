@@ -53,6 +53,7 @@ import {
   getEquipmentCardTextLayout,
   getEquipmentPageLayout,
   getRuleGridLayout,
+  getRosterGridLayout,
   getTitleTextLayout,
   splitText,
 } from "../src/domain/canvas-renderer.js";
@@ -402,6 +403,15 @@ test("规则卡会根据每段文字量生成不同高度并保持在安全区�
   assert.ok(layout.contentBottom <= 1318);
   assert.equal(layout.cards[0].y, layout.cards[1].y);
   assert.ok(layout.cards[2].y > layout.cards[0].y);
+});
+
+test("成员较少时卡片会利用空白放大正文，成员较多时仍保持安全区", () => {
+  const four = getRosterGridLayout(360, 4);
+  const eight = getRosterGridLayout(360, 8);
+  assert.equal(four.cardHeight, 390);
+  assert.ok(eight.cardHeight < four.cardHeight);
+  assert.ok(four.contentBottom <= 1318);
+  assert.ok(eight.contentBottom <= 1318);
 });
 
 test("导出质检可以识别文字截断并给出黄色提醒", () => {

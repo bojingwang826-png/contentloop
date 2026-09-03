@@ -713,8 +713,8 @@ function drawEquipmentCard(ctx, item, image, x, y, width, height, audit, itemInd
 
   ctx.fillStyle = colors.text;
   drawFittedText(ctx, item.detail, x + 28, y + textLayout.detailTop, width - 56, textLayout.detailHeight, {
-    preferredSize: 25,
-    minSize: 17,
+    preferredSize: 27,
+    minSize: 18,
     weight: 500,
     lineFactor: 1.28,
     maxLines: 2,
@@ -728,8 +728,8 @@ function drawEquipmentCard(ctx, item, image, x, y, width, height, audit, itemInd
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = colors.muted;
   drawVerticallyCenteredFittedText(ctx, item.cue, x + 146, y + textLayout.cueTop + 8, width - 194, textLayout.cueHeight - 16, {
-    preferredSize: 21,
-    minSize: 17,
+    preferredSize: 23,
+    minSize: 18,
     weight: 500,
     lineFactor: 1.25,
     maxLines: 2,
@@ -828,8 +828,8 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
     const detailHeight = Math.max(42, cueY - detailY - (cueHeight ? 14 : 0));
     ctx.fillStyle = colors.muted;
     drawFittedText(ctx, item.detail, x + padding, detailY, width - (padding * 2), detailHeight, {
-      preferredSize: ultra ? 22 : dense ? 22 : 22,
-      minSize: 18,
+      preferredSize: ultra ? 23 : dense ? 24 : 25,
+      minSize: 19,
       weight: 500,
       lineFactor: 1.32,
       maxLines: ultra ? 6 : 5,
@@ -840,8 +840,8 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
       ctx.fillStyle = colors.accent;
       const cueInset = ultra ? 14 : 18;
       drawVerticallyCenteredFittedText(ctx, item.example, x + padding + cueInset, cueY + 9, width - ((padding + cueInset) * 2), cueHeight - 18, {
-        preferredSize: ultra ? 20 : dense ? 20 : 20,
-        minSize: 16,
+        preferredSize: ultra ? 21 : dense ? 22 : 23,
+        minSize: 17,
         weight: 600,
         lineFactor: 1.28,
         maxLines: 2,
@@ -867,16 +867,28 @@ function drawRosterCard(ctx, item, images, x, y, width, height, audit, index) {
   const detailTop = y + (compact ? 82 : 132);
   const detail = compact ? (item.traits.join(" / ") || item.detail) : item.detail || item.traits.join(" / ");
   drawFittedText(ctx, detail, x + inset, detailTop, width - (inset * 2), Math.max(24, height - (compact ? 92 : 146)), {
-    preferredSize: compact ? 16 : 20, minSize: 13, weight: 500, lineFactor: 1.25, maxLines: compact ? 2 : 4,
+    preferredSize: compact ? 18 : 23, minSize: compact ? 14 : 17, weight: 500, lineFactor: 1.3, maxLines: compact ? 2 : 5,
   }, audit, `成员 ${index + 1} 羁绊`);
+}
+
+export function getRosterGridLayout(bodyTop, count) {
+  const safeCount = Math.max(1, Number(count) || 1);
+  const rows = Math.ceil(safeCount / 2);
+  const gap = 16;
+  const available = 1318 - bodyTop;
+  const cardHeight = Math.min(390, Math.floor((available - ((rows - 1) * gap)) / rows));
+  return {
+    rows,
+    gap,
+    cardHeight,
+    contentBottom: bodyTop + (rows * cardHeight) + (Math.max(0, rows - 1) * gap),
+  };
 }
 
 function drawRoster(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 18;
   const count = model.items.length;
-  const rows = Math.ceil(count / 2);
-  const gap = 16;
-  const cardHeight = Math.min(270, Math.floor((1318 - bodyTop - ((rows - 1) * gap)) / rows));
+  const { rows, gap, cardHeight, contentBottom } = getRosterGridLayout(bodyTop, count);
   const width = 467;
   model.items.forEach((item, index) => {
     const isOddLast = count % 2 === 1 && index === count - 1;
@@ -885,7 +897,7 @@ function drawRoster(ctx, model, images, audit) {
     drawRosterCard(ctx, item, images, x, y, width, cardHeight, audit, index);
   });
   audit.drawnBlocks = model.items.length;
-  audit.contentBottom = bodyTop + (rows * cardHeight) + (Math.max(0, rows - 1) * gap);
+  audit.contentBottom = contentBottom;
 }
 
 function hexPath(ctx, cx, cy, radius) {
@@ -968,7 +980,7 @@ function drawBoard(ctx, model, images, audit) {
   ctx.fillText("实战调整", 90, tipY + 45);
   ctx.fillStyle = colors.muted;
   drawFittedText(ctx, "英雄已放入 4×7 真实棋盘格。先按当前赛季职责排基础位置，再参考公开攻略的站位思路；遇到切后排、范围伤害或同侧集火时，优先让主输出换边，再调整前排保护关系。", 90, tipY + 76, 884, 58, {
-    preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.28, maxLines: 2,
+    preferredSize: 23, minSize: 18, weight: 500, lineFactor: 1.28, maxLines: 2,
   }, audit, "站位实战调整");
   audit.drawnBlocks = model.items.length;
   audit.contentBottom = tipY + 146;
@@ -1002,7 +1014,7 @@ function drawSideRule(ctx, model, images, audit) {
     }, audit, `侧栏步骤 ${index + 1} 标题`);
     ctx.fillStyle = colors.muted;
     drawFittedText(ctx, item.detail, cardX + 24, y + 92, cardWidth - 48, cardHeight - 108, {
-      preferredSize: 20, minSize: 17, weight: 500, lineFactor: 1.32, maxLines: 5,
+      preferredSize: 22, minSize: 18, weight: 500, lineFactor: 1.32, maxLines: 5,
     }, audit, `侧栏步骤 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
@@ -1039,7 +1051,7 @@ function drawChecklist(ctx, model, images, audit) {
     ctx.fillStyle = colors.text;
     drawFittedText(ctx, item.name, 150, y + 46, 828, 44, { preferredSize: 25, minSize: 20, weight: 800, lineFactor: 1.15, maxLines: 1 }, audit, `清单 ${index + 1} 标题`);
     ctx.fillStyle = colors.muted;
-    drawFittedText(ctx, item.detail, 150, y + 83, 828, cardHeight - 96, { preferredSize: 21, minSize: 17, weight: 500, lineFactor: 1.28, maxLines: 3 }, audit, `清单 ${index + 1} 正文`);
+    drawFittedText(ctx, item.detail, 150, y + 83, 828, cardHeight - 96, { preferredSize: 23, minSize: 19, weight: 500, lineFactor: 1.28, maxLines: 3 }, audit, `清单 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
   audit.contentBottom = bodyTop + available;

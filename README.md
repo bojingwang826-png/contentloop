@@ -20,7 +20,7 @@ npm run dev
 
 ```powershell
 $env:DEEPSEEK_API_KEY="你的密钥"
-$env:DEEPSEEK_MODEL="deepseek-v4-pro"
+$env:DEEPSEEK_MODEL="deepseek-v4-flash"
 npm run dev
 ```
 

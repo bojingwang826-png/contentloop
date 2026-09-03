@@ -282,7 +282,7 @@ function modelInput(request) {
 
 export function createAiService({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
   const apiKey = String(env.DEEPSEEK_API_KEY || "").trim();
-  const model = String(env.DEEPSEEK_MODEL || "deepseek-v4-pro").trim();
+  const model = String(env.DEEPSEEK_MODEL || "deepseek-v4-flash").trim();
   const minuteLimit = Number(env.AI_REQUESTS_PER_MINUTE || 6);
   const dayLimit = Number(env.AI_REQUESTS_PER_DAY || 30);
   const usage = new Map();
@@ -316,7 +316,7 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
           model,
           instructions: "输出必须严格匹配 JSON Schema。",
           input: `${modelInput(request)}${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，不要再次返回相同结构。` : ""}`,
-          reasoning: { effort: "low" },
+          reasoning: { effort: "none" },
           max_output_tokens: new Set(["understand_input", "build_research_brief", "generate_outline"]).has(request.taskType) ? 3000 : 1800,
           text: { format: { type: "json_schema", name: request.taskType, schema: resultSchema(request) } },
         };
