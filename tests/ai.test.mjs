@@ -190,7 +190,12 @@ test("大纲重写把手改标题和重写要求作为最高优先级意图交�
     titleWasEdited: true,
     userEditedFields: ["title"],
   });
-  const result = runMockAiTask(request, { page }).result;
+  const result = {
+    pageId: page.id,
+    changes: request.input.mustChangePaths.map((path) => ({ path, value: `${request.input.fields.find((field) => field.path === path).label}：围绕重装战士技能重新讲解` })),
+    summary: "理解为整页改讲重装战士技能，并已重写所有旧正文",
+    mode: "matched",
+  };
   let sentBody;
   const service = createAiService({
     env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
@@ -205,6 +210,44 @@ test("大纲重写把手改标题和重写要求作为最高优先级意图交�
   assert.match(sentBody.input, /茂凯的技能参数与实战用法/u);
   assert.match(sentBody.input, /优先级最高|不能恢复成旧标题/u);
   assert.match(sentBody.input, /技能范围、控制时间和适合站位/u);
+});
+
+test("整页删除重写要求会强制页签、说明和全部正文实际变化", () => {
+  const page = pageFixture();
+  page.preservedFields = [];
+  page.title = "重装战士英雄的技能";
+  const request = createRewriteFieldsRequest(page, "本页全部内容删除，只写重装战士英雄的技能", "full-page-rewrite", {
+    surface: "outline",
+    currentTitle: page.title,
+    originalTitle: "朋友安利型",
+    titleWasEdited: true,
+    userEditedFields: ["title"],
+  });
+  assert.equal(request.input.rewriteScope, "full_page");
+  assert.equal(request.input.mustChangePaths.includes("title"), false);
+  assert.equal(request.input.mustChangePaths.includes("kicker"), true);
+  assert.equal(request.input.mustChangePaths.includes("subtitle"), true);
+  assert.equal(request.input.mustChangePaths.some((path) => path.startsWith("items.")), true);
+
+  const unchanged = {
+    taskId: request.taskId,
+    schemaVersion: 1,
+    provider: "openai",
+    model: "test",
+    result: {
+      pageId: page.id,
+      changes: request.input.mustChangePaths.map((path) => ({
+        path,
+        value: request.input.fields.find((field) => field.path === path).value,
+      })),
+      summary: "声称整页重写",
+      mode: "matched",
+    },
+    warnings: [], unknowns: [], usedSourceIds: [], usedFactIds: [], usedAssetIds: [],
+  };
+  const checked = validateAiTaskResponse(unchanged, request);
+  assert.equal(checked.success, false);
+  assert.match(checked.issues.join("；"), /没有实际变化/u);
 });
 
 test("在线 AI 返回重复小节时会在应用前自动差异化", () => {

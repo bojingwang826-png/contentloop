@@ -73,6 +73,7 @@ export function editableFieldsForPage(page) {
     const value = getPageValue(page, path);
     if (!preserved.has(path) && typeof value === "string") fields.push({ path, label, value });
   };
+  add("kicker", "页签");
   add("title", "主标题");
   add("subtitle", "补充说明");
   const items = page?.blocks?.[0]?.items || [];
@@ -89,6 +90,7 @@ export function editableFieldsForPage(page) {
 }
 
 export function createRewriteFieldsRequest(page, suggestion, taskId = createTaskId("rewrite"), intentContext = {}) {
+  const normalizedSuggestion = String(suggestion || "").trim();
   const safeIntentContext = {
     surface: intentContext.surface === "outline" ? "outline" : "editor",
     currentTitle: String(intentContext.currentTitle || page?.title || "").trim().slice(0, 120),
@@ -98,6 +100,13 @@ export function createRewriteFieldsRequest(page, suggestion, taskId = createTask
       ? intentContext.userEditedFields.filter((item) => ["kicker", "title", "subtitle", "keyPoints"].includes(item)).slice(0, 4)
       : [],
   };
+  const fields = editableFieldsForPage(page);
+  const fullPageRewrite = /整(?:一)?页|全页|全部(?:内容)?(?:删除|重写|重做|修改|替换)|只(?:保留|写|讲)|完全(?:重写|重做)|推翻(?:这|本)页/u.test(normalizedSuggestion);
+  const manuallyEditedPath = { kicker: "kicker", title: "title", subtitle: "subtitle", keyPoints: "" };
+  const protectedIntentPaths = new Set(safeIntentContext.userEditedFields.map((field) => manuallyEditedPath[field]).filter(Boolean));
+  const mustChangePaths = fullPageRewrite
+    ? fields.map((field) => field.path).filter((path) => !protectedIntentPaths.has(path))
+    : [];
   return {
     taskId,
     taskType: "rewrite_fields",
@@ -105,16 +114,18 @@ export function createRewriteFieldsRequest(page, suggestion, taskId = createTask
     locale: "zh-CN",
     input: {
       pageId: page.id,
-      suggestion: String(suggestion || "").trim(),
-      fields: editableFieldsForPage(page),
+      suggestion: normalizedSuggestion,
+      fields,
       page: structuredClone(page),
       intentContext: safeIntentContext,
+      rewriteScope: fullPageRewrite ? "full_page" : "targeted",
+      mustChangePaths,
       instructionPriority: [
         "用户刚刚手动修改的标题与字段，是本次创作方向，不得还原成旧主题",
         "重写文本框中的最新要求，是本次修改的具体目标",
         "当前页其余文字只是待改素材，需要围绕新标题和要求重新组织",
       ],
-      contentPolicy: "每个小节必须根据自己的标题、英雄、装备、功能或场景单独总结；同页和跨页都不得复用相同句式，仅替换名词也视为重复。适用场景、选择判断和实战提醒要分别给出具体条件与动作，不得输出万能套话。语气像懂游戏的朋友在小红书分享：自然、直接、可以有轻量提醒，但不要堆夸张网络词或机械地重复固定前缀。",
+      contentPolicy: "每个小节必须根据自己的标题、英雄、装备、功能或场景单独总结；同页和跨页都不得复用相同句式，仅替换名词也视为重复。适用场景、选择判断和实战提醒要分别给出具体条件与动作，不得输出万能套话。语气像懂游戏的朋友在小红书分享：自然、直接、可以有轻量提醒，但不要堆夸张网络词或机械地重复固定前缀。full_page 时，mustChangePaths 中每个字段都必须围绕新主题重新创作，不能沿用旧正文。",
     },
     allowedSourceIds: [],
     allowedFactIds: [],
@@ -212,6 +223,8 @@ export function validateAiTaskRequest(request) {
     if (typeof request.input?.pageId !== "string") issues.push("缺少 pageId");
     if (typeof request.input?.suggestion !== "string" || !request.input.suggestion.trim()) issues.push("缺少修改建议");
     if (!Array.isArray(request.input?.fields) || !request.input.fields.length) issues.push("没有可修改字段");
+    if (!["targeted", "full_page"].includes(request.input?.rewriteScope)) issues.push("重写范围无效");
+    if (!Array.isArray(request.input?.mustChangePaths)) issues.push("缺少整页重写字段范围");
   }
   if (request.taskType === "generate_publish_copy") {
     if (typeof request.input?.currentBody !== "string") issues.push("缺少当前正文");
@@ -305,6 +318,7 @@ export function validateAiTaskResponse(response, request) {
 
   if (request.taskType === "rewrite_fields") {
     const allowedPaths = new Set(request.input.fields.map((field) => field.path));
+    const originalValues = new Map(request.input.fields.map((field) => [field.path, field.value]));
     if (response.result?.pageId !== request.input.pageId) issues.push("AI 返回了错误的页面 ID");
     if (!Array.isArray(response.result?.changes) || !response.result.changes.length) {
       issues.push("AI 没有返回可应用的字段变化");
@@ -316,6 +330,13 @@ export function validateAiTaskResponse(response, request) {
         seen.add(change?.path);
         if (typeof change?.value !== "string" || !change.value.trim() || change.value.length > 500) {
           issues.push(`字段 ${change?.path || "未知"} 内容无效`);
+        }
+      }
+      if (request.input.rewriteScope === "full_page") {
+        for (const path of request.input.mustChangePaths) {
+          if (!seen.has(path)) issues.push(`整页重写遗漏字段：${path}`);
+          const change = response.result.changes.find((item) => item?.path === path);
+          if (change && change.value.trim() === String(originalValues.get(path) || "").trim()) issues.push(`整页重写字段没有实际变化：${path}`);
         }
       }
     }

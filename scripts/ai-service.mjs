@@ -209,7 +209,7 @@ function resultSchema(request) {
         pageId: { type: "string", const: request.input.pageId },
         changes: {
           type: "array",
-          minItems: 1,
+          minItems: request.input.rewriteScope === "full_page" ? Math.max(1, request.input.mustChangePaths?.length || 0) : 1,
           maxItems: request.input.fields.length,
           items: {
             type: "object",
@@ -258,6 +258,8 @@ function modelInput(request) {
       suggestion: request.input.suggestion,
       fields: request.input.fields,
       intentContext: request.input.intentContext,
+      rewriteScope: request.input.rewriteScope,
+      mustChangePaths: request.input.mustChangePaths,
       instructionPriority: request.input.instructionPriority,
       contentPolicy: request.input.contentPolicy,
     };
@@ -268,6 +270,7 @@ function modelInput(request) {
 2. suggestion 是用户此刻的具体要求。要结合当前标题理解，不得只把 suggestion 原样塞进正文。
 3. fields 中的旧文字只是待改素材。若与新标题冲突，应整段重写；若用户要求整页换方向，所有相关字段都要一起更新。
 4. outline 场景要让页面说明和每条页面要点共同服务于新标题；editor 场景要让标题、补充说明及每个小节形成同一条叙事线。
+5. rewriteScope=full_page 时是整页推翻重写：必须返回 mustChangePaths 中的每个字段，而且每个值都要与原字段明显不同。手动改过的标题是新主题锚点，不要把旧正文换几个名词继续使用。
 只返回有实际变化的字段。不得改装备名、配方、图标、页面顺序或未经支持的游戏事实。summary 必须具体说明你理解了什么意图、改了哪些方向。
 任务输入：${JSON.stringify(safeInput)}`;
   }
