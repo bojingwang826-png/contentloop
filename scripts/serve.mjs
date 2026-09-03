@@ -59,14 +59,14 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/ai/status") {
       sendJson(response, 200, {
         ...aiService.status(),
-        accessRequired: Boolean(process.env.OPENAI_API_KEY && process.env.AI_ACCESS_CODE),
+        accessRequired: Boolean(process.env.DEEPSEEK_API_KEY && process.env.AI_ACCESS_CODE),
         accessProtected: Boolean(process.env.AI_ACCESS_CODE),
       });
       return;
     }
     if (request.method === "POST" && url.pathname === "/api/ai/tasks") {
       try {
-        if (process.env.OPENAI_API_KEY) requireAiAccess(request);
+        if (process.env.DEEPSEEK_API_KEY) requireAiAccess(request);
         const payload = await readJson(request);
         const result = await aiService.run(payload, { clientId: request.socket.remoteAddress || "local" });
         sendJson(response, 200, result);

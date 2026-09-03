@@ -60,17 +60,25 @@ test("在线来源提取启用网页检索并使用独立结构", async () => {
     failureReason: "",
   };
   let sentBody;
+  let sentUrl;
+  let sentHeaders;
   const service = createAiService({
-    env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
-    fetchImpl: async (_url, options) => {
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
+    fetchImpl: async (url, options) => {
+      sentUrl = url;
+      sentHeaders = options.headers;
       sentBody = JSON.parse(options.body);
       return { ok: true, json: async () => ({ output_text: JSON.stringify(result) }) };
     },
   });
   const response = await service.run(request, { clientId: "source-live-user" });
-  assert.equal(sentBody.tools[0].type, "web_search_preview");
+  assert.equal(sentUrl, "https://api.deepseek.com/responses");
+  assert.equal(sentHeaders.authorization, "Bearer test-key");
+  assert.equal(sentBody.tools[0].type, "web_search");
   assert.equal(sentBody.text.format.name, "extract_source");
+  assert.equal("strict" in sentBody.text.format, false);
   assert.deepEqual(response.usedSourceIds, ["source-live"]);
+  assert.equal(response.provider, "deepseek");
 });
 
 test("输入理解会拒绝越界评分和不存在的事实引用", () => {
@@ -89,14 +97,14 @@ test("在线输入理解启用网页检索并保持结构化输出", async () =>
   const demo = runMockAiTask(request);
   let sentBody;
   const service = createAiService({
-    env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
     fetchImpl: async (_url, options) => {
       sentBody = JSON.parse(options.body);
       return { ok: true, json: async () => ({ output_text: JSON.stringify(demo.result) }) };
     },
   });
   const response = await service.run(request, { clientId: "understand-user" });
-  assert.equal(sentBody.tools[0].type, "web_search_preview");
+  assert.equal(sentBody.tools[0].type, "web_search");
   assert.equal(sentBody.text.format.type, "json_schema");
   assert.equal(response.result.topics.length, 5);
 });
@@ -106,7 +114,7 @@ test("纯灵感输入不会无故启用付费网页检索", async () => {
   const demo = runMockAiTask(request);
   let sentBody;
   const service = createAiService({
-    env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
     fetchImpl: async (_url, options) => {
       sentBody = JSON.parse(options.body);
       return { ok: true, json: async () => ({ output_text: JSON.stringify(demo.result) }) };
@@ -154,7 +162,7 @@ test("动态研究和大纲使用严格结构化输出但不会重复联网检�
   const outlineRequest = createOutlineRequest(analysis.topics[0], researchResult, researchResult.recommendedViewpointId, "structured-outline");
   const sent = [];
   const service = createAiService({
-    env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
     fetchImpl: async (_url, options) => {
       const body = JSON.parse(options.body);
       sent.push(body);
@@ -198,7 +206,7 @@ test("大纲重写把手改标题和重写要求作为最高优先级意图交�
   };
   let sentBody;
   const service = createAiService({
-    env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
     fetchImpl: async (_url, options) => {
       sentBody = JSON.parse(options.body);
       return { ok: true, json: async () => ({ output_text: JSON.stringify(result) }) };
@@ -329,7 +337,7 @@ test("浏览器只在 AI 请求头中发送本次会话访问码", async () => {
 });
 
 test("线上 Worker 在调用付费模型前校验 AI 访问码", async () => {
-  const env = { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test", AI_ACCESS_CODE: "right-code" };
+  const env = { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test", AI_ACCESS_CODE: "right-code" };
   const statusResponse = await worker.fetch(new Request("https://example.com/api/ai/status"), env);
   const status = await statusResponse.json();
   assert.equal(status.mode, "live");
@@ -356,7 +364,7 @@ test("在线模型连续两次返回无效结构时保留旧稿并报错", async
   const request = createPublishCopyRequest(sampleProject.exportCopy.body, "更有网感", "publish-invalid");
   let calls = 0;
   const service = createAiService({
-    env: { OPENAI_API_KEY: "test-key", OPENAI_MODEL: "gpt-test" },
+    env: { DEEPSEEK_API_KEY: "test-key", DEEPSEEK_MODEL: "deepseek-test" },
     fetchImpl: async () => {
       calls += 1;
       return { ok: true, json: async () => ({ output: [{ content: [{ type: "output_text", text: "不是 JSON" }] }] }) };
@@ -378,7 +386,7 @@ test("在线模式按访客限制调用频率", async () => {
   const request = createPublishCopyRequest(sampleProject.exportCopy.body, "精简一点", "publish-live-limit");
   const result = { body: sampleProject.exportCopy.body, summary: "已精简", mode: "matched" };
   const service = createAiService({
-    env: { OPENAI_API_KEY: "test-key", AI_REQUESTS_PER_MINUTE: "1", AI_REQUESTS_PER_DAY: "2" },
+    env: { DEEPSEEK_API_KEY: "test-key", AI_REQUESTS_PER_MINUTE: "1", AI_REQUESTS_PER_DAY: "2" },
     fetchImpl: async () => ({ ok: true, json: async () => ({ output_text: JSON.stringify(result) }) }),
   });
   await service.run(request, { clientId: "same-live-user" });

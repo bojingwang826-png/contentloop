@@ -95,11 +95,11 @@ const checks = [
   [app.includes("rewriteSummary"), "缺少 AI 建议理解反馈"],
   [!app.includes("onclick="), "发现内联 onclick，事件边界不统一"],
   [app.includes("runAiTask"), "页面尚未接入统一 AI 客户端"],
-  [aiService.includes("/v1/responses"), "服务端尚未接入 Responses API"],
+  [aiService.includes("https://api.deepseek.com/responses"), "服务端尚未接入 DeepSeek Responses API"],
   [aiContract.includes("understand_input"), "首页输入理解尚未接入统一 AI 协议"],
-  [aiService.includes("web_search_preview"), "在线输入理解尚未接入公开网页检索"],
+  [aiService.includes('type: "web_search"'), "在线输入理解尚未接入公开网页检索"],
   [aiContract.includes("allowedFactIds"), "AI 请求缺少事实白名单"],
-  [aiService.includes("OPENAI_API_KEY"), "API Key 未限定在服务端读取"],
+  [aiService.includes("DEEPSEEK_API_KEY"), "API Key 未限定在服务端读取"],
 ];
 
 for (const [passed, message] of checks) {

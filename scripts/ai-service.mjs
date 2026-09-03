@@ -278,8 +278,8 @@ function modelInput(request) {
 }
 
 export function createAiService({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const apiKey = String(env.OPENAI_API_KEY || "").trim();
-  const model = String(env.OPENAI_MODEL || "gpt-5.4-mini").trim();
+  const apiKey = String(env.DEEPSEEK_API_KEY || "").trim();
+  const model = String(env.DEEPSEEK_MODEL || "deepseek-v4-pro").trim();
   const minuteLimit = Number(env.AI_REQUESTS_PER_MINUTE || 6);
   const dayLimit = Number(env.AI_REQUESTS_PER_DAY || 30);
   const usage = new Map();
@@ -287,10 +287,10 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
   function status() {
     return {
       mode: apiKey ? "live" : "demo",
-      provider: apiKey ? "openai" : "mock",
+      provider: apiKey ? "deepseek" : "mock",
       model: apiKey ? model : "deterministic-demo-v1",
       limits: { perMinute: minuteLimit, perDay: dayLimit },
-      message: apiKey ? "在线 AI 已连接；所有结果都会经过结构检查。" : "未配置 API Key，当前使用免费演示模式。",
+      message: apiKey ? "DeepSeek 在线模型已连接；所有结果都会经过结构检查。" : "未配置 DeepSeek API Key，当前使用免费演示模式。",
     };
   }
 
@@ -315,29 +315,28 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
           input: modelInput(request),
           reasoning: { effort: "low" },
           max_output_tokens: new Set(["understand_input", "build_research_brief", "generate_outline"]).has(request.taskType) ? 3000 : 1800,
-          store: false,
-          text: { format: { type: "json_schema", name: request.taskType, strict: true, schema: resultSchema(request) } },
+          text: { format: { type: "json_schema", name: request.taskType, schema: resultSchema(request) } },
         };
         const needsWebSearch = request.taskType === "extract_source"
           || (request.taskType === "understand_input"
             && (/https?:\/\//i.test(`${request.input.rawInput} ${request.input.supplement}`)
               || /当前|今日|热点|版本|最新/.test(`${request.input.rawInput} ${request.input.supplement}`)));
         if (needsWebSearch) {
-          requestBody.tools = [{ type: "web_search_preview", search_context_size: "low" }];
+          requestBody.tools = [{ type: "web_search" }];
           requestBody.tool_choice = "auto";
         }
-        const apiResponse = await fetchImpl("https://api.openai.com/v1/responses", {
+        const apiResponse = await fetchImpl("https://api.deepseek.com/responses", {
           method: "POST",
           headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
           body: JSON.stringify(requestBody),
         });
         const payload = await apiResponse.json();
-        if (!apiResponse.ok) throw new Error(payload?.error?.message || "OpenAI 请求失败");
+        if (!apiResponse.ok) throw new Error(payload?.error?.message || "DeepSeek 请求失败");
         const result = normalizeUnderstandResult(JSON.parse(extractOutputText(payload)), request, payload);
         const response = {
           taskId: request.taskId,
           schemaVersion: 1,
-          provider: "openai",
+          provider: "deepseek",
           model,
           result,
           warnings: request.taskType === "understand_input" && result.sources.some((source) => source.status === "unavailable")

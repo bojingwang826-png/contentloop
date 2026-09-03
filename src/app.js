@@ -486,7 +486,7 @@ function renderInputAnalysis() {
   const selected = analysis.topics.find((item) => item.id === state.inputSelectedCandidateId) || analysis.topics[0];
   const selectedPending = Boolean(selected?.pending);
   return `<section class="panel input-analysis-panel" aria-labelledby="input-analysis-title">
-    <div class="analysis-heading"><div>${icon("search")}<span><p class="eyebrow">AI 输入理解</p><h2 id="input-analysis-title">${escapeHtml(analysis.intent)}</h2><small>${escapeHtml(analysis.summary)}</small>${analysis.liveResearch ? `<span class="live-research-meta">${escapeHtml(analysis.liveResearch.season)} · 数据版本 ${escapeHtml(analysis.liveResearch.patch)} · 已联网核对</span>` : ""}</span></div><span class="status-pill ${analysis.liveResearch || state.inputAnalysisProvider === "openai" ? "success" : "neutral"}">${analysis.liveResearch ? "赛季实时资料" : state.inputAnalysisProvider === "openai" ? "在线检索" : "演示分析"}</span></div>
+    <div class="analysis-heading"><div>${icon("search")}<span><p class="eyebrow">AI 输入理解</p><h2 id="input-analysis-title">${escapeHtml(analysis.intent)}</h2><small>${escapeHtml(analysis.summary)}</small>${analysis.liveResearch ? `<span class="live-research-meta">${escapeHtml(analysis.liveResearch.season)} · 数据版本 ${escapeHtml(analysis.liveResearch.patch)} · 已联网核对</span>` : ""}</span></div><span class="status-pill ${analysis.liveResearch || ["deepseek", "openai"].includes(state.inputAnalysisProvider) ? "success" : "neutral"}">${analysis.liveResearch ? "赛季实时资料" : ["deepseek", "openai"].includes(state.inputAnalysisProvider) ? "在线检索" : "演示分析"}</span></div>
     <div class="analysis-boundary-grid">
       <div><h3>事实边界</h3><div class="analysis-fact-list">${analysis.facts.map((fact) => { const [label, tone] = factLabels[fact.status] || ["待核验", "warning"]; return `<article><span class="status-pill ${tone}">${label}</span><strong>${escapeHtml(fact.label)}</strong><p>${escapeHtml(fact.claim)}</p></article>`; }).join("")}</div></div>
       <div class="analysis-source-area"><div class="source-area-title"><h3>来源关系</h3>${visibleSources.length ? renderSourceGate(visibleSources) : ""}</div>${visibleSources.length ? `<div class="source-card-list">${visibleSources.map(renderSourceCard).join("")}</div>` : `<p class="analysis-empty">这里只展示官方资料。非官方网页只用于当前内容分析，不会把链接写进项目页面。</p>`}</div>
@@ -1740,7 +1740,7 @@ async function retryExportPage(pageId) {
 }
 
 function aiProviderName(response) {
-  return response.provider === "openai" ? `在线 AI · ${response.model}` : "演示 AI";
+  return response.provider === "deepseek" ? `DeepSeek · ${response.model}` : response.provider === "openai" ? `在线 AI · ${response.model}` : "演示 AI";
 }
 
 async function analyzeSourceInputWithAi() {
@@ -1987,7 +1987,7 @@ async function rewriteSelectedPagesWithAi(suggestion, selectedIds) {
     state.aiBusy = false;
     state.aiTaskMessage = "";
     saveState();
-    const provider = responses.some((item) => item.provider === "openai") ? "在线 AI" : "演示 AI";
+    const provider = responses.some((item) => ["deepseek", "openai"].includes(item.provider)) ? "在线 AI" : "演示 AI";
     showToast(`${provider} 已完成整篇修改：更新 ${responses.length} 页，可一次撤销`);
   } catch (error) {
     state.pages = originalPages;

@@ -244,7 +244,7 @@ async function extractPublicSource(value) {
 let cachedAiKey = "";
 let cachedAiService;
 function aiService(env) {
-  const key = `${env.OPENAI_API_KEY || ""}|${env.OPENAI_MODEL || ""}|${env.AI_REQUESTS_PER_MINUTE || ""}|${env.AI_REQUESTS_PER_DAY || ""}`;
+  const key = `${env.DEEPSEEK_API_KEY || ""}|${env.DEEPSEEK_MODEL || ""}|${env.AI_REQUESTS_PER_MINUTE || ""}|${env.AI_REQUESTS_PER_DAY || ""}`;
   if (!cachedAiService || key !== cachedAiKey) {
     cachedAiKey = key;
     cachedAiService = createAiService({ env, fetchImpl: fetch });
@@ -258,13 +258,13 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/ai/status") {
       return json({
         ...aiService(env).status(),
-        accessRequired: Boolean(env.OPENAI_API_KEY && env.AI_ACCESS_CODE),
+        accessRequired: Boolean(env.DEEPSEEK_API_KEY && env.AI_ACCESS_CODE),
         accessProtected: Boolean(env.AI_ACCESS_CODE),
       });
     }
     if (request.method === "POST" && url.pathname === "/api/ai/tasks") {
       try {
-        if (env.OPENAI_API_KEY) requireAiAccess(request, env);
+        if (env.DEEPSEEK_API_KEY) requireAiAccess(request, env);
         const payload = await readJson(request);
         const result = await aiService(env).run(payload, {
           clientId: request.headers.get("cf-connecting-ip") || "online-demo",
