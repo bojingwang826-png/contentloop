@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { normalizeOcrText, formatOcrResult, extractScreenshotSections, removeConfirmedScreenshot, isScreenshotReviewReady } from "../src/domain/ocr-layout.js";
 import {
   classifyCommentLines,
   classifyScreenshotText,
@@ -60,4 +61,42 @@ test("确认后的截图会转换为可分析输入而不是冒充事实", () =>
 
 test("装备名称提取不会重复", () => {
   assert.deepEqual(extractEquipmentNames("无尽之刃，无尽之刃，暴风之剑"), ["暴风之剑", "无尽之刃"]);
+});
+
+test("OCR 只清理中文排版，不猜测错字，不破坏英文词间空格", () => {
+  assert.equal(normalizeOcrText("No.1 裁决 花 妊\nTeam Fight Tactics"), "No.1 裁决花妊\nTeam Fight Tactics");
+});
+
+test("低可信行不作为可用正文，原始结果保留供核对", () => {
+  const result = formatOcrResult({ confidence: 51, blocks: [{ paragraphs: [{ lines: [
+    { text: "阵容 排名", confidence: 92 },
+    { text: "乱码XYZ", confidence: 12 }, { text: "abc", confidence: 20 },
+    { text: "No.2 阵容乙", confidence: 90 },
+  ] }] }] });
+  assert.equal(result.title, "阵容排名");
+  assert.match(result.text, /2 行小字/);
+  assert.doesNotMatch(result.text, /XYZ/);
+  assert.match(result.rawText, /XYZ/);
+  assert.equal(result.uncertainLines, 2);
+});
+
+test("排名分组保留各组正文和未识别提示，不生成不存在的英雄", () => {
+  const text = "阵容排名\nNo.1 阵容甲\n英雄甲\nNo.2 阵容乙\n【待核对】";
+  assert.deepEqual(extractScreenshotSections(text), [
+    { rank: 1, title: "阵容甲", lines: ["英雄甲"] },
+    { rank: 2, title: "阵容乙", lines: ["【待核对】"] },
+  ]);
+  assert.equal(createConfirmedScreenshotRecord({ text }).sections.length, 2);
+});
+
+test("删除只移除指定截图，原数组及其他记录不变", () => {
+  const records = [{ id: "a", text: "原文" }, { id: "b", text: "另一个" }];
+  assert.deepEqual(removeConfirmedScreenshot(records, "a"), [records[1]]);
+  assert.equal(records.length, 2);
+  assert.deepEqual(removeConfirmedScreenshot(records, "不存在"), records);
+});
+
+test("未核对文字不会进入下游 AI", () => {
+  assert.equal(isScreenshotReviewReady("排名\n【待核对：2 行小字或图标无法可靠识别】"), false);
+  assert.equal(isScreenshotReviewReady("已核对的阵容资料"), true);
 });

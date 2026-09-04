@@ -1,3 +1,5 @@
+import { extractScreenshotSections } from "./ocr-layout.js";
+
 const equipmentNames = [
   "暴风之剑", "反曲之弓", "无用大棒", "女神之泪", "锁子甲", "负极斗篷", "巨人腰带", "拳套", "金铲铲", "金锅锅",
   "无尽之刃", "最后的轻语", "珠光护手", "朔极之矛", "大天使之杖", "鬼索的狂暴之刃", "泰坦的坚决",
@@ -98,6 +100,7 @@ export function deriveScreenshotResult(value, categoryOverride = "") {
     confidence: inferred.confidence,
     metrics: extractScreenshotMetrics(text),
     equipment: extractEquipmentNames(text),
+    sections: extractScreenshotSections(text),
     commentGroups: category === "comments" ? classifyCommentLines(text) : { questions: [], objections: [], experiences: [], emotions: [] },
   };
 }

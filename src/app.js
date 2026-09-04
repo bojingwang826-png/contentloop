@@ -67,6 +67,7 @@ import {
 import { clearAiAccessCode, getAiRuntimeStatus, researchGameTopic, runAiTask, setAiAccessCode } from "./services/ai-client.js";
 import { extractPublicSource } from "./services/source-client.js";
 import { createLowResolutionPreview, recognizeScreenshot } from "./services/screenshot-ocr-client.js";
+import { removeConfirmedScreenshot, isScreenshotReviewReady } from "./domain/ocr-layout.js";
 
 const project = parseProject(sampleProject);
 const storageKey = "game-note-studio-phase-a-v2";
@@ -507,8 +508,8 @@ function renderScreenshotInsights(capture) {
   const commentCount = Object.values(derived.commentGroups).reduce((total, items) => total + items.length, 0);
   return `<div class="ocr-insight-grid" aria-live="polite">
     <article><small>系统判断</small><strong>${escapeHtml(derived.categoryLabel)}</strong><span>${escapeHtml(derived.route)}</span></article>
-    <article><small>识别质量</small><strong>${capture.ocrConfidence ? `${capture.ocrConfidence}%` : "待手动核对"}</strong><span>${derived.confidence === "high" ? "分类把握较高" : "建议检查分类和正文"}</span></article>
-    <article><small>结构化结果</small><strong>${metrics.length + derived.equipment.length + commentCount} 项</strong><span>${metrics.length ? metrics.map(([key, value]) => `${metricLabels[key]} ${value}`).join(" · ") : derived.equipment.length ? derived.equipment.join(" · ") : commentCount ? `${commentCount} 条评论线索` : "可直接编辑识别正文"}</span></article>
+    <article><small>OCR 置信度（非准确率）</small><strong>${capture.ocrConfidence ? `${capture.ocrConfidence}%` : "待手动核对"}</strong><span>${capture.uncertainLines ? `${capture.uncertainLines} 行待核对，请上传原图或裁剪小字区域` : "请对照原图核对名称和数字"}</span></article>
+    <article><small>结构化结果</small><strong>${metrics.length + derived.equipment.length + commentCount + derived.sections.length} 项</strong><span>${derived.sections.length ? `${derived.sections.length} 个排名分组（保留各组正文）` : metrics.length ? metrics.map(([key, value]) => `${metricLabels[key]} ${value}`).join(" · ") : derived.equipment.length ? derived.equipment.join(" · ") : commentCount ? `${commentCount} 条评论线索` : "可直接编辑识别正文"}</span></article>
   </div>`;
 }
 
@@ -538,11 +539,13 @@ function renderScreenshotOcr() {
           <label for="screenshot-text">识别正文</label>
           <textarea id="screenshot-text" data-field="screenshotText" rows="8" placeholder="自动识别失败时，可把截图中的关键文字手动输入这里">${escapeHtml(capture.text)}</textarea>
           ${capture.text.trim() ? renderScreenshotInsights(capture) : `<p class="ocr-empty-result">还没有识别到文字。可以手动输入至少 4 个字，再确认使用。</p>`}
-          <button class="button primary full" type="button" data-action="confirm-screenshot" ${capture.text.trim().length < 4 ? "disabled" : ""}>${icon("check")}确认识别结果并继续分析</button>`
+          ${capture.rawText ? `<details class="ocr-raw"><summary>查看原始识别文字（可能有误，仅供核对）</summary><pre>${escapeHtml(capture.rawText)}</pre></details>` : ""}
+          <p class="helper-text">有“待核对”行时，请对照原图补充文字，或删除不需要的行后再确认。识别不会根据头像猜英雄名称。</p>
+          <button class="button primary full" type="button" data-action="confirm-screenshot" ${!isScreenshotReviewReady(capture.text) ? "disabled" : ""}>${icon("check")}确认识别结果并继续分析</button>`
           : `<div class="ocr-placeholder"><span>${icon("shield")}</span><strong>AI 先识别，你再确认</strong><p>游戏资料会进入候选选题；发布数据进入待复盘记录；评论会提炼问题、反对意见和新选题。</p></div>`}
       </div>
     </div>
-    ${recent.length ? `<div class="ocr-recent"><strong>最近确认的截图</strong><div>${recent.map((record) => `<article>${record.preview ? `<img src="${escapeHtml(record.preview)}" alt="" />` : ""}<span><b>${escapeHtml(record.title)}</b><small>${escapeHtml(record.categoryLabel)} · ${escapeHtml(record.route)}</small></span></article>`).join("")}</div></div>` : ""}
+    ${recent.length ? `<div class="ocr-recent"><strong>最近确认的截图</strong><div>${recent.map((record) => `<article>${record.preview ? `<img src="${escapeHtml(record.preview)}" alt="" />` : ""}<span><b>${escapeHtml(record.title)}</b><small>${escapeHtml(record.categoryLabel)} · ${escapeHtml(record.route)}</small></span><button class="ocr-delete" type="button" data-action="delete-confirmed-screenshot" data-id="${escapeHtml(record.id)}" aria-label="删除截图：${escapeHtml(record.title)}">删除</button></article>`).join("")}</div></div>` : ""}
   </section>`;
 }
 
@@ -1462,6 +1465,9 @@ async function readScreenshot(file) {
       ...state.screenshotCapture,
       status: "ready",
       text: result.text.trim(),
+      title: result.title || state.screenshotCapture.title,
+      rawText: result.rawText,
+      uncertainLines: result.uncertainLines,
       category: derived.category,
       ocrConfidence: result.confidence,
       progress: 100,
@@ -1490,10 +1496,26 @@ function clearScreenshotCapture() {
   requestAnimationFrame(() => document.querySelector("#screenshot-file")?.focus());
 }
 
+function deleteConfirmedScreenshot(id) {
+  const record = state.confirmedScreenshots.find((item) => item.id === id);
+  if (!record || !window.confirm(`删除截图“${record.title}”？将移除这条截图记录，已生成的文章不会改变。`)) return;
+  state.confirmedScreenshots = removeConfirmedScreenshot(state.confirmedScreenshots, id);
+  // Only clear the input when it is still the unedited copy of this screenshot.
+  if (!state.aiBusy && state.sourceInput === screenshotInputContext(record)) {
+    state.sourceInput = "";
+    state.inputAnalysis = null;
+    state.inputSelectedCandidateId = "";
+  }
+  saveState();
+  render();
+  document.querySelector('[data-action="delete-confirmed-screenshot"]')?.focus();
+  showToast("已删除截图记录，已生成的文章保持不变");
+}
+
 async function confirmScreenshotCapture() {
   const capture = state.screenshotCapture;
-  if (capture.text.trim().length < 4 || capture.status === "processing") {
-    showToast("请先确认至少 4 个字的识别正文");
+  if (!isScreenshotReviewReady(capture.text) || capture.status === "processing") {
+    showToast("请先补充或删除待核对行，再确认至少 4 个字的正文");
     document.querySelector("#screenshot-text")?.focus();
     return;
   }
@@ -2035,6 +2057,7 @@ app.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action]");
   if (!target) return;
   const { action, id, value, versionId, fieldKey, index, direction } = target.dataset;
+  if (action === "delete-confirmed-screenshot") { deleteConfirmedScreenshot(id); return; }
 
   const aiActions = new Set(["analyze-source-input", "start-dynamic-research", "build-dynamic-outline", "rewrite-outline-page", "rewrite-page", "confirm-document-rewrite", "rewrite-publish-body"]);
   if (aiActions.has(action)) {
@@ -2613,7 +2636,7 @@ app.addEventListener("input", (event) => {
   if (field === "screenshotText") {
     state.screenshotCapture.text = event.target.value;
     const button = document.querySelector('[data-action="confirm-screenshot"]');
-    if (button) button.disabled = state.screenshotCapture.text.trim().length < 4;
+    if (button) button.disabled = !isScreenshotReviewReady(state.screenshotCapture.text);
   }
   if (field === "inputSupplement") state.inputSupplement = event.target.value;
   if (["outlineKicker", "outlineTitle", "outlineSummary", "outlineKeyPoints"].includes(field)) {

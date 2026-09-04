@@ -319,15 +319,35 @@ a {
 }
 
 .ocr-recent article {
+  position: relative;
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 10px;
-  padding: 10px;
+  padding: 10px 62px 10px 10px;
   background: var(--canvas-soft);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
 }
+
+.ocr-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 48px;
+  min-height: 44px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--canvas-soft);
+  color: #ffb3c6;
+  cursor: pointer;
+}
+
+.ocr-delete:hover { background: #493043; }
+.ocr-delete:focus-visible { outline: 2px solid #f4cd66; outline-offset: 2px; }
+.ocr-raw { margin: 12px 0; }
+.ocr-raw summary { cursor: pointer; padding: 12px 0; }
+.ocr-raw pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow-y: auto; }
 
 .ocr-recent img {
   width: 52px;
