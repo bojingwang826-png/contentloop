@@ -761,6 +761,8 @@ export function getRuleGridLayout(bodyTop, items, options = {}) {
         index: (row * 2) + column,
         row,
         column,
+        x: 64 + column * ((952 - gap) / 2 + gap),
+        width: rowItems.length === 1 ? 952 : (952 - gap) / 2,
         y: nextY,
         height,
       });
@@ -1118,9 +1120,7 @@ function drawRule(ctx, model, images, audit) {
   const layout = getRuleGridLayout(bodyTop, model.items, { minHeights });
   model.items.forEach((item, index) => {
     const card = layout.cards[index];
-    const isOddLast = model.items.length % 2 === 1 && index === model.items.length - 1;
-    const x = isOddLast && model.items.length === 3 ? 306.5 : isOddLast ? 64 : 64 + ((index % 2) * (width + layout.gap));
-    drawRuleCard(ctx, item, images, x, card.y, isOddLast ? 952 : width, card.height, audit, index, density, sharedCueHeight);
+    drawRuleCard(ctx, item, images, card.x, card.y, card.width, card.height, audit, index, density, sharedCueHeight);
   });
   audit.drawnBlocks = model.items.length;
   audit.contentBottom = layout.contentBottom;

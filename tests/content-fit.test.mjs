@@ -43,6 +43,20 @@ test("规则卡按同排最长文案扩展高度，下一排随之下移", () =>
   assert.ok(layout.contentBottom > 1440);
 });
 
+test("一至七张规则卡都在页面内，奇数末张左对齐占满一行", () => {
+  for (let count = 1; count <= 7; count += 1) {
+    const { cards } = getRuleGridLayout(500, Array.from({ length: count }, () => ({})));
+    for (const card of cards) {
+      assert.ok(card.x >= 64);
+      assert.ok(card.x + card.width <= 1016);
+    }
+    if (count % 2) {
+      assert.equal(cards.at(-1).x, 64);
+      assert.equal(cards.at(-1).width, 952);
+    }
+  }
+});
+
 test("长正文和黄色提示完整绘制，长页同步扩展画布与页脚安全区", async (t) => {
   const previousDocument = globalThis.document;
   const previousImage = globalThis.Image;
@@ -55,7 +69,9 @@ test("长正文和黄色提示完整绘制，长页同步扩展画布与页脚�
       beginPath() { this.points = []; },
       moveTo(x, y) { this.points.push([x, y]); },
       arcTo(x, y, x2, y2) { this.points.push([x, y], [x2, y2]); },
-      fill() { if (this.fillStyle === "#1e1434") {
+      fill() {
+        assert.ok(this.points.every(([x]) => x >= 0 && x <= canvas.width), "绘制区域不能越出画布左右边界");
+        if (this.fillStyle === "#1e1434") {
         const xs = this.points.map(([x]) => x), ys = this.points.map(([, y]) => y);
         canvas.cues.push([Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]);
       } },
@@ -68,20 +84,20 @@ test("长正文和黄色提示完整绘制，长页同步扩展画布与页脚�
     canvas.getContext = () => ctx;
     return canvas;
   } };
-  for (const layoutStyle of ["cards", "checklist", "timeline", "roster"]) {
+  for (const [layoutStyle, count] of [["cards", 1], ["cards", 3], ["cards", 4], ["cards", 5], ["checklist", 4], ["timeline", 4], ["roster", 4]]) {
     const page = { id: "long", pageNo: 3, type: "rule", layoutStyle, title: "测试完整内容", subtitle: "保留所有文字",
-      blocks: [{ kind: "steps", items: Array.from({ length: 4 }, (_, i) => ({ name: ["甲", "乙", "丙", "丁"][i],
+      blocks: [{ kind: "steps", items: Array.from({ length: count }, (_, i) => ({ name: ["甲", "乙", "丙", "丁", "戊"][i],
         imageUrl: "https://ddragon.leagueoflegends.com/test.png",
         detail: "观察当前来牌和装备后，再选择合适的调整方式。".repeat(12),
         example: "先看输出能否启动，再判断是否需要更换承伤位置。".repeat(i + 1),
       })) }] };
     const { canvas, audit } = await renderPageToCanvasWithAudit(page);
     assert.equal(audit.status, "pass", `${layoutStyle}: ${JSON.stringify(audit.issues)}`);
-    assert.ok(canvas.height > 1440, layoutStyle);
+    if (count > 1) assert.ok(canvas.height > 1440, layoutStyle);
     assert.ok(audit.contentBottom <= canvas.height - 116, layoutStyle);
     if (layoutStyle === "cards") {
-      const cues = canvas.cues.slice(-4);
-      assert.equal(cues.length, 4);
+      const cues = canvas.cues.slice(-count);
+      assert.equal(cues.length, count);
       assert.ok(cues.every((box) => JSON.stringify(box) === JSON.stringify(cues[0])));
     }
   }
