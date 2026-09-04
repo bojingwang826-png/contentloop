@@ -16,6 +16,17 @@ export function updateOutlinePage(pages, pageNo, patch) {
   ));
 }
 
+export function resolveOutlineRewriteInstruction(draft, original, suggestion = "") {
+  if (suggestion.trim()) return suggestion.trim();
+  const changes = [
+    ["title", "标题"], ["summary", "页面说明"], ["keyPointsText", "页面要点"], ["kicker", "页签"],
+  ].filter(([key]) => draft?.[key] !== original?.[key])
+    .map(([key, label]) => `${label}已改为：${draft?.[key] || "（已清空）"}`);
+  return changes.length
+    ? `根据我刚刚修改的字段重写整页，理解新的内容方向并同步修改说明和全部要点，不要沿用无关旧内容。\n${changes.join("\n")}`
+    : "根据当前标题和页面说明重写这一页，提供具体、有用且互不重复的内容，语气自然。";
+}
+
 export function validateOutlinePageDraft(draft, { requireKeyPoints = false } = {}) {
   const kicker = String(draft?.kicker || "").trim();
   const title = String(draft?.title || "").trim();

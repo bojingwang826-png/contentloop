@@ -41,7 +41,7 @@ export function assessExportAudit(audit) {
       label: "页面排版",
       message: "正文坐标无效，页面可能只有背景或页眉页脚",
     });
-  } else if (audit.contentBottom > EXPORT_SAFE_CONTENT_BOTTOM) {
+  } else if (audit.contentBottom > (audit.safeContentBottom || EXPORT_SAFE_CONTENT_BOTTOM)) {
     issues.push({
       type: "content-overflow",
       severity: "error",

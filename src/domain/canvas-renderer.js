@@ -107,6 +107,11 @@ function drawWrappedText(
   return visible.length;
 }
 
+export function measureCopyHeight(ctx, text, width, size, weight = 500, lineFactor = 1.32) {
+  setFont(ctx, size, weight);
+  return splitText(ctx, text, width).length * Math.ceil(size * lineFactor);
+}
+
 function getFittedTextLayout(ctx, text, maxWidth, maxHeight, options = {}) {
   const preferredSize = Number(options.preferredSize || 22);
   const minSize = Number(options.minSize || 14);
@@ -434,12 +439,12 @@ function contentVisualFit(model) {
 }
 
 function drawBackground(ctx, model) {
-  const gradient = ctx.createLinearGradient(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+  const gradient = ctx.createLinearGradient(0, 0, EXPORT_WIDTH, ctx.canvas.height);
   gradient.addColorStop(0, model.type === "cover" ? "#120a2c" : colors.canvas);
   gradient.addColorStop(0.62, "#34204e");
   gradient.addColorStop(1, model.type === "cover" ? "#72335e" : "#5a2a61");
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+  ctx.fillRect(0, 0, EXPORT_WIDTH, ctx.canvas.height);
 
   const glow = ctx.createRadialGradient(890, 190, 20, 890, 190, 420);
   glow.addColorStop(0, "rgba(242,200,98,.20)");
@@ -493,7 +498,7 @@ function drawTitle(ctx, model, compact = false, audit = null) {
     titleLayout.y,
     titleLayout.maxWidth,
     titleLayout.lineHeight,
-    titleLayout.maxLines,
+    Infinity,
     audit,
     "主标题",
   );
@@ -505,13 +510,13 @@ function drawTitle(ctx, model, compact = false, audit = null) {
     64,
     titleBottom + 58,
     952,
-    compact ? 174 : 168,
+    Infinity,
     {
       preferredSize: compact ? 28 : 31,
-      minSize: 16,
+      minSize: compact ? 28 : 31,
       weight: 500,
       lineFactor: 1.38,
-      maxLines: 8,
+      maxLines: Infinity,
     },
     audit,
     "副标题",
@@ -522,6 +527,8 @@ function drawTitle(ctx, model, compact = false, audit = null) {
 }
 
 function drawFooter(ctx, model) {
+  ctx.save();
+  ctx.translate(0, ctx.canvas.height - EXPORT_HEIGHT);
   ctx.strokeStyle = "rgba(242,200,98,.25)";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -536,6 +543,7 @@ function drawFooter(ctx, model) {
   setFont(ctx, 28, 800);
   ctx.fillText(`${model.pageNo}/${model.totalPages}`, 1016, 1395);
   ctx.textAlign = "left";
+  ctx.restore();
 }
 
 export function getBalancedCoverTagLayout(itemCount, options = {}) {
@@ -690,7 +698,8 @@ export function getEquipmentCardTextLayout(height) {
 }
 
 function drawEquipmentCard(ctx, item, image, x, y, width, height, audit, itemIndex) {
-  const textLayout = getEquipmentCardTextLayout(height);
+  const cueHeight = measureCopyHeight(ctx, item.cue, width - 194, 23, 500, 1.25) + 24;
+  const textLayout = { detailTop: 166, detailHeight: height - 166 - cueHeight - 28, cueHeight, cueTop: height - cueHeight - 12 };
   fillRounded(ctx, x, y, width, height, 28, "rgba(38,24,63,.90)", "rgba(242,200,98,.20)");
   drawIcon(ctx, image, x + 28, y + 24, 102, 22);
   ctx.fillStyle = colors.text;
@@ -714,10 +723,10 @@ function drawEquipmentCard(ctx, item, image, x, y, width, height, audit, itemInd
   ctx.fillStyle = colors.text;
   drawFittedText(ctx, item.detail, x + 28, y + textLayout.detailTop, width - 56, textLayout.detailHeight, {
     preferredSize: 27,
-    minSize: 18,
+    minSize: 27,
     weight: 500,
     lineFactor: 1.28,
-    maxLines: 2,
+    maxLines: Infinity,
   }, audit, `${item.name}适用场景`);
 
   fillRounded(ctx, x + 28, y + textLayout.cueTop, width - 56, textLayout.cueHeight, 18, colors.cue, "rgba(242,200,98,.18)");
@@ -729,10 +738,10 @@ function drawEquipmentCard(ctx, item, image, x, y, width, height, audit, itemInd
   ctx.fillStyle = colors.muted;
   drawVerticallyCenteredFittedText(ctx, item.cue, x + 146, y + textLayout.cueTop + 8, width - 194, textLayout.cueHeight - 16, {
     preferredSize: 23,
-    minSize: 18,
+    minSize: 23,
     weight: 500,
     lineFactor: 1.25,
-    maxLines: 2,
+    maxLines: Infinity,
   }, audit, `${item.name}选择判断`);
 }
 
@@ -743,17 +752,20 @@ export function getRuleGridLayout(bodyTop, items, options = {}) {
   const rows = Math.max(1, Math.ceil(list.length / 2));
   const rowSlot = Math.max(230, Math.floor((contentLimit - bodyTop - ((rows - 1) * gap)) / rows));
   const cards = [];
+  let nextY = bodyTop;
   for (let row = 0; row < rows; row += 1) {
     const rowItems = list.slice(row * 2, (row * 2) + 2);
+    const height = Math.max(rowSlot, ...(options.minHeights || []).slice(row * 2, (row * 2) + 2));
     rowItems.forEach((item, column) => {
       cards.push({
         index: (row * 2) + column,
         row,
         column,
-        y: bodyTop + (row * (rowSlot + gap)),
-        height: rowSlot,
+        y: nextY,
+        height,
       });
     });
+    nextY += height + gap;
   }
   return {
     gap,
@@ -766,6 +778,8 @@ export function getRuleGridLayout(bodyTop, items, options = {}) {
 function drawEquipment(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 18;
   const layout = getEquipmentPageLayout(bodyTop, model.items.length);
+  layout.height = Math.max(layout.height, ...model.items.map((item) => 218 + measureCopyHeight(ctx, item.detail, 896, 27, 500, 1.28) + measureCopyHeight(ctx, item.cue, 758, 23, 500, 1.25)));
+  layout.contentBottom = bodyTop + model.items.length * layout.height + Math.max(0, model.items.length - 1) * layout.gap;
   model.items.forEach((item, index) => {
     drawEquipmentCard(ctx, item, images.get(item.name), 64, bodyTop + (index * (layout.height + layout.gap)), 952, layout.height, audit, index);
   });
@@ -807,8 +821,9 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
       maxLines: 3,
     }, audit, `步骤 ${index + 1} 标题`);
 
+    const cueInset = ultra ? 14 : 18;
     const cueHeight = item.example
-      ? (ultra ? 94 : dense ? 100 : 108)
+      ? measureCopyHeight(ctx, item.example, width - ((padding + cueInset) * 2), ultra ? 21 : dense ? 22 : 23, 600, 1.28) + 28
       : 0;
     const cueY = cueHeight ? y + height - cueHeight - padding : y + height - padding;
     const markerBottom = y + padding + markerSize;
@@ -829,7 +844,6 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
     if (cueHeight) {
       fillRounded(ctx, x + padding, cueY, width - (padding * 2), cueHeight, 18, colors.cue, "rgba(242,200,98,.16)");
       ctx.fillStyle = colors.accent;
-      const cueInset = ultra ? 14 : 18;
       drawVerticallyCenteredFittedText(ctx, item.example, x + padding + cueInset, cueY + 9, width - ((padding + cueInset) * 2), cueHeight - 18, {
         preferredSize: ultra ? 21 : dense ? 22 : 23,
         minSize: ultra ? 21 : dense ? 22 : 23,
@@ -879,7 +893,9 @@ export function getRosterGridLayout(bodyTop, count) {
 function drawRoster(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 18;
   const count = model.items.length;
-  const { rows, gap, cardHeight, contentBottom } = getRosterGridLayout(bodyTop, count);
+  const { rows, gap, cardHeight: slotHeight } = getRosterGridLayout(bodyTop, count);
+  const cardHeight = Math.max(300, slotHeight, ...model.items.map((item) => 146 + measureCopyHeight(ctx, item.detail || item.traits.join(" / "), 423, 23, 500, 1.3)));
+  const contentBottom = bodyTop + rows * cardHeight + (rows - 1) * gap;
   const width = 467;
   model.items.forEach((item, index) => {
     const isOddLast = count % 2 === 1 && index === count - 1;
@@ -997,14 +1013,16 @@ function drawSideRule(ctx, model, images, audit) {
   const bodyTop = drawTitle(ctx, model, true, audit) + 20;
   const count = Math.min(4, model.items.length);
   const layout = getSideRuleLayout(bodyTop, count);
-  const { panelHeight, gap, cardHeight } = layout;
   const hasVisual = Boolean(model.visual);
+  const cardWidth = hasVisual ? 592 : 952;
+  const cardHeight = Math.max(layout.cardHeight, ...model.items.map((item) => 108 + measureCopyHeight(ctx, item.detail, cardWidth - 48, 22, 500, 1.28)));
+  const gap = layout.gap;
+  const panelHeight = count * cardHeight + Math.max(0, count - 1) * gap;
   const visualWidth = hasVisual ? 340 : 0;
   if (hasVisual) {
     drawIllustration(ctx, images.get(`illustration:${model.visual.name}`), 64, bodyTop, visualWidth, panelHeight, 28, contentVisualFit(model));
   }
   const cardX = hasVisual ? 424 : 64;
-  const cardWidth = hasVisual ? 592 : 952;
   model.items.slice(0, count).forEach((item, index) => {
     const y = bodyTop + (index * (cardHeight + gap));
     fillRounded(ctx, cardX, y, cardWidth, cardHeight, 24, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
@@ -1019,12 +1037,12 @@ function drawSideRule(ctx, model, images, audit) {
       preferredSize: 26, minSize: 20, weight: 800, lineFactor: 1.18, maxLines: 2,
     }, audit, `侧栏步骤 ${index + 1} 标题`);
     ctx.fillStyle = colors.muted;
-    drawFittedText(ctx, item.detail, cardX + 24, y + layout.detailTop, cardWidth - 48, layout.detailHeight, {
+    drawFittedText(ctx, item.detail, cardX + 24, y + layout.detailTop, cardWidth - 48, cardHeight - 108, {
       preferredSize: 22, minSize: 22, weight: 500, lineFactor: 1.28, maxLines: Infinity,
     }, audit, `侧栏步骤 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
-  audit.contentBottom = layout.contentBottom;
+  audit.contentBottom = bodyTop + panelHeight;
 }
 
 function drawChecklist(ctx, model, images, audit) {
@@ -1039,9 +1057,12 @@ function drawChecklist(ctx, model, images, audit) {
   const count = Math.min(4, model.items.length);
   const gap = 14;
   const available = 1298 - bodyTop;
-  const cardHeight = Math.floor((available - ((count - 1) * gap)) / Math.max(1, count));
+  const slotHeight = Math.floor((available - ((count - 1) * gap)) / Math.max(1, count));
+  let nextY = bodyTop;
   model.items.slice(0, count).forEach((item, index) => {
-    const y = bodyTop + (index * (cardHeight + gap));
+    const cardHeight = Math.max(slotHeight, 96 + measureCopyHeight(ctx, item.detail, 828, 23, 500, 1.28));
+    const y = nextY;
+    nextY += cardHeight + gap;
     fillRounded(ctx, 64, y, 952, cardHeight, 24, "rgba(38,24,63,.90)", "rgba(242,200,98,.22)");
     ctx.beginPath();
     ctx.arc(108, y + (cardHeight / 2), 24, 0, Math.PI * 2);
@@ -1060,7 +1081,7 @@ function drawChecklist(ctx, model, images, audit) {
     drawFittedText(ctx, item.detail, 150, y + 83, 828, cardHeight - 96, { preferredSize: 23, minSize: 23, weight: 500, lineFactor: 1.28, maxLines: Infinity }, audit, `清单 ${index + 1} 正文`);
   });
   audit.drawnBlocks = count;
-  audit.contentBottom = bodyTop + available;
+  audit.contentBottom = nextY - gap;
 }
 
 function drawRule(ctx, model, images, audit) {
@@ -1080,7 +1101,17 @@ function drawRule(ctx, model, images, audit) {
     bodyTop += illustrationHeight + 18;
   }
   const width = 467;
-  const layout = getRuleGridLayout(bodyTop, model.items);
+  const ultra = density === "ultra";
+  const dense = density !== "standard";
+  const padding = ultra ? 16 : dense ? 18 : 24;
+  const cueInset = ultra ? 14 : 18;
+  const minHeights = model.items.map((item, index) => {
+    const cardWidth = model.items.length % 2 === 1 && index === model.items.length - 1 ? 952 : width;
+    const bodyHeight = measureCopyHeight(ctx, item.detail, cardWidth - padding * 2, ultra ? 23 : dense ? 24 : 25);
+    const cueHeight = item.example ? measureCopyHeight(ctx, item.example, cardWidth - (padding + cueInset) * 2, ultra ? 21 : dense ? 22 : 23, 600, 1.28) + 28 : 0;
+    return 150 + bodyHeight + cueHeight + padding + 14;
+  });
+  const layout = getRuleGridLayout(bodyTop, model.items, { minHeights });
   model.items.forEach((item, index) => {
     const card = layout.cards[index];
     const isOddLast = model.items.length % 2 === 1 && index === model.items.length - 1;
@@ -1091,10 +1122,10 @@ function drawRule(ctx, model, images, audit) {
   audit.contentBottom = layout.contentBottom;
 }
 
-async function renderPageToCanvasWithAudit(page, accountName = "") {
+export async function renderPageToCanvasWithAudit(page, accountName = "") {
   if (document.fonts?.ready) await document.fonts.ready;
   const model = buildPageRenderModel(page, accountName);
-  const audit = createExportAudit(model);
+  let audit = createExportAudit(model);
   const images = await loadPageAssets(model, audit);
   const canvas = document.createElement("canvas");
   canvas.width = EXPORT_WIDTH;
@@ -1102,12 +1133,25 @@ async function renderPageToCanvasWithAudit(page, accountName = "") {
   const ctx = canvas.getContext("2d", { alpha: false });
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  drawBackground(ctx, model);
-  drawHeader(ctx, model);
-  if (model.type === "cover") drawCover(ctx, model, images, audit);
-  else if (model.type === "tree") drawTree(ctx, model, images, audit);
-  else if (model.type === "equipment") drawEquipment(ctx, model, images, audit);
-  else drawRule(ctx, model, images, audit);
+  const draw = () => {
+    drawBackground(ctx, model);
+    drawHeader(ctx, model);
+    if (model.type === "cover") drawCover(ctx, model, images, audit);
+    else if (model.type === "tree") drawTree(ctx, model, images, audit);
+    else if (model.type === "equipment") drawEquipment(ctx, model, images, audit);
+    else drawRule(ctx, model, images, audit);
+  };
+  draw();
+  const requiredHeight = Math.max(EXPORT_HEIGHT, Math.ceil(audit.contentBottom + 122));
+  if (requiredHeight > canvas.height) {
+    const { expectedIcons, loadedIcons } = audit;
+    canvas.height = requiredHeight;
+    audit = { ...createExportAudit(model), expectedIcons, loadedIcons };
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    draw();
+  }
+  audit.safeContentBottom = canvas.height - 116;
   drawFooter(ctx, model);
   return { canvas, audit: assessExportAudit(audit) };
 }

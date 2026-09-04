@@ -31,6 +31,7 @@ import {
   updateOutlinePage,
   updatePage,
   validateOutlinePageDraft,
+  resolveOutlineRewriteInstruction,
 } from "./domain/state.js";
 import {
   buildPageRenderModel,
@@ -756,12 +757,12 @@ function beginOutlineEdit(page, dynamic = false) {
   state.outlineEditorDraft = {
     kicker: page.kicker || "",
     title: page.title || "",
-    summary: dynamic ? (page.summary || "") : (page.purpose || ""),
-    keyPointsText: dynamic ? (page.keyPoints || []).join("\n") : "",
+    summary: dynamic ? (page.summary || "") : (page.subtitle || page.purpose || ""),
+    keyPointsText: dynamic ? (page.keyPoints || []).join("\n") : (page.blocks?.[0]?.items || []).map((item) => typeof item === "string" ? item : item.detail || "").join("\n"),
   };
   state.outlineOriginalDraft = structuredClone(state.outlineEditorDraft);
   state.outlineEditError = "";
-  state.outlineRewriteSuggestion = "换一种更自然、更具体的表达，保留本页重点";
+  state.outlineRewriteSuggestion = "";
 }
 
 function outlineDraftAsEditablePage(pageNo, draft) {
@@ -784,8 +785,8 @@ function outlineDraftAsEditablePage(pageNo, draft) {
 async function rewriteOutlineDraftWithAi() {
   const pageNo = state.outlineEditingPageNo;
   const draft = state.outlineEditorDraft;
-  const suggestion = state.outlineRewriteSuggestion.trim();
-  if (!pageNo || !draft || !suggestion || state.aiBusy) return;
+  if (!pageNo || !draft || state.aiBusy) return;
+  const suggestion = resolveOutlineRewriteInstruction(draft, state.outlineOriginalDraft, state.outlineRewriteSuggestion);
   const editablePage = outlineDraftAsEditablePage(pageNo, draft);
   const original = state.outlineOriginalDraft || draft;
   const userEditedFields = [
@@ -842,8 +843,8 @@ function outlineEditForm(page, dynamic = false) {
     <div class="outline-ai-rewrite">
       <div><strong>${icon("refresh")}AI 重写这页</strong><span>${state.aiStatus?.mode === "live" ? "会读取你刚改的标题和修改要求，只重写当前页" : "需要连接在线 AI 后才会执行，不再使用演示改写"}</span></div>
       <label class="sr-only" for="outline-rewrite-${page.pageNo}">第 ${page.pageNo} 页 AI 重写意见</label>
-      <textarea id="outline-rewrite-${page.pageNo}" rows="2" data-field="outlineRewriteSuggestion" placeholder="例如：更像朋友分享，加入具体判断条件">${escapeHtml(state.outlineRewriteSuggestion)}</textarea>
-      <button class="button secondary" type="button" data-action="rewrite-outline-page" ${state.aiBusy || !state.outlineRewriteSuggestion.trim() ? "disabled" : ""} aria-busy="${state.aiBusy}">${icon("refresh")}${state.aiBusy ? escapeHtml(state.aiTaskMessage || "AI 正在处理…") : "AI 重写当前页"}</button>
+      <textarea id="outline-rewrite-${page.pageNo}" rows="2" data-field="outlineRewriteSuggestion" placeholder="可选：补充修改意见；留空时按你刚改的标题、说明和要点重写">${escapeHtml(state.outlineRewriteSuggestion)}</textarea>
+      <button class="button secondary" type="button" data-action="rewrite-outline-page" ${state.aiBusy ? "disabled" : ""} aria-busy="${state.aiBusy}">${icon("refresh")}${state.aiBusy ? escapeHtml(state.aiTaskMessage || "AI 正在处理…") : "AI 重写当前页"}</button>
       ${renderAiModeInline()}
     </div>
     <div class="outline-edit-actions"><button class="button ghost" type="button" data-action="cancel-outline-edit">取消</button><button class="button primary" type="submit">保存这一页</button></div>
@@ -927,6 +928,8 @@ function scheduleEditorFinalPreview(page, delay = 80) {
       if (!target || frame?.dataset.previewPageId !== expectedPageId) return;
       target.width = rendered.width;
       target.height = rendered.height;
+      target.style.aspectRatio = `${rendered.width} / ${rendered.height}`;
+      frame.style.aspectRatio = `${rendered.width} / ${rendered.height}`;
       const context = target.getContext("2d", { alpha: false });
       context.drawImage(rendered, 0, 0);
       target.classList.add("is-ready");
@@ -1257,7 +1260,7 @@ function renderEditor() {
         ${state.pages.map((page) => `<button class="page-thumb ${page.id === current.id ? "is-selected" : ""}" type="button" data-action="select-page" data-id="${page.id}" aria-pressed="${page.id === current.id}"><span>0${page.pageNo}</span><strong>${escapeHtml(page.title)}</strong>${page.locked ? icon("lock") : ""}</button>`).join("")}
       </aside>
       <section class="canvas-panel" aria-label="当前页面实时预览">
-        <div class="canvas-toolbar"><span>3:4 手机预览 <small class="sticky-preview-hint">· 实时固定</small></span><span class="status-pill ${visualStatus.tone}" title="${escapeHtml(visualStatus.detail)}">${escapeHtml(visualStatus.label)}</span></div>
+        <div class="canvas-toolbar"><span>手机预览 <small class="sticky-preview-hint">· 长文自动加高</small></span><span class="status-pill ${visualStatus.tone}" title="${escapeHtml(visualStatus.detail)}">${escapeHtml(visualStatus.label)}</span></div>
         ${previewPage(current)}
       </section>
       <aside class="inspector">
@@ -2227,11 +2230,6 @@ app.addEventListener("click", (event) => {
     render();
   }
   if (action === "rewrite-outline-page") {
-    if (!state.outlineRewriteSuggestion.trim()) {
-      showToast("请先输入一句重写意见");
-      document.querySelector('[data-field="outlineRewriteSuggestion"]')?.focus();
-      return;
-    }
     void rewriteOutlineDraftWithAi();
   }
   if (action === "confirm-dynamic-outline") {
@@ -2611,7 +2609,7 @@ app.addEventListener("input", (event) => {
   if (field === "outlineRewriteSuggestion") {
     state.outlineRewriteSuggestion = event.target.value;
     const button = document.querySelector('[data-action="rewrite-outline-page"]');
-    if (button) button.disabled = state.aiBusy || !state.outlineRewriteSuggestion.trim();
+    if (button) button.disabled = state.aiBusy;
   }
   if (["sourceTitle", "sourceAuthor", "sourcePublishedAt", "sourceExcerpt"].includes(field)) {
     const property = {
@@ -2754,12 +2752,17 @@ app.addEventListener("submit", (event) => {
     };
     state.outlineConfirmed = false;
   } else {
+    const originalPage = state.pages.find((page) => page.pageNo === pageNo);
     state.pages = updateOutlinePage(state.pages, pageNo, {
       kicker,
       title,
       purpose: summary,
       subtitle: summary,
       baseSubtitle: summary,
+      blocks: originalPage.blocks.map((block, index) => index === 0 && keyPoints.length ? {
+        ...block,
+        items: keyPoints.map((detail, itemIndex) => typeof block.items[itemIndex] === "string" ? detail : { ...block.items[itemIndex], detail }),
+      } : block),
     });
     state.outlineConfirmed = false;
   }
