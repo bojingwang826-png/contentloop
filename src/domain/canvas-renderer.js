@@ -787,7 +787,7 @@ function drawEquipment(ctx, model, images, audit) {
   audit.contentBottom = layout.contentBottom;
 }
 
-function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, density = "standard") {
+function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, density = "standard", sharedCueHeight = 0) {
     const dense = density !== "standard";
     const ultra = density === "ultra";
     const padding = ultra ? 16 : dense ? 18 : 24;
@@ -823,7 +823,7 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
 
     const cueInset = ultra ? 14 : 18;
     const cueHeight = item.example
-      ? measureCopyHeight(ctx, item.example, width - ((padding + cueInset) * 2), ultra ? 21 : dense ? 22 : 23, 600, 1.28) + 28
+      ? sharedCueHeight || measureCopyHeight(ctx, item.example, width - ((padding + cueInset) * 2), ultra ? 21 : dense ? 22 : 23, 600, 1.28) + 28
       : 0;
     const cueY = cueHeight ? y + height - cueHeight - padding : y + height - padding;
     const markerBottom = y + padding + markerSize;
@@ -842,9 +842,11 @@ function drawRuleCard(ctx, item, images, x, y, width, height, audit, index, dens
     }, audit, `步骤 ${index + 1} 解释`);
 
     if (cueHeight) {
-      fillRounded(ctx, x + padding, cueY, width - (padding * 2), cueHeight, 18, colors.cue, "rgba(242,200,98,.16)");
+      const cueWidth = Math.min(width, 467) - padding * 2;
+      const cueX = x + (width - cueWidth) / 2;
+      fillRounded(ctx, cueX, cueY, cueWidth, cueHeight, 18, colors.cue, "rgba(242,200,98,.16)");
       ctx.fillStyle = colors.accent;
-      drawVerticallyCenteredFittedText(ctx, item.example, x + padding + cueInset, cueY + 9, width - ((padding + cueInset) * 2), cueHeight - 18, {
+      drawVerticallyCenteredFittedText(ctx, item.example, cueX + cueInset, cueY + 9, cueWidth - cueInset * 2, cueHeight - 18, {
         preferredSize: ultra ? 21 : dense ? 22 : 23,
         minSize: ultra ? 21 : dense ? 22 : 23,
         weight: 600,
@@ -1105,10 +1107,12 @@ function drawRule(ctx, model, images, audit) {
   const dense = density !== "standard";
   const padding = ultra ? 16 : dense ? 18 : 24;
   const cueInset = ultra ? 14 : 18;
+  const sharedCueHeight = Math.max(0, ...model.items.map((item) => item.example
+    ? measureCopyHeight(ctx, item.example, width - (padding + cueInset) * 2, ultra ? 21 : dense ? 22 : 23, 600, 1.28) + 28 : 0));
   const minHeights = model.items.map((item, index) => {
     const cardWidth = model.items.length % 2 === 1 && index === model.items.length - 1 ? 952 : width;
     const bodyHeight = measureCopyHeight(ctx, item.detail, cardWidth - padding * 2, ultra ? 23 : dense ? 24 : 25);
-    const cueHeight = item.example ? measureCopyHeight(ctx, item.example, cardWidth - (padding + cueInset) * 2, ultra ? 21 : dense ? 22 : 23, 600, 1.28) + 28 : 0;
+    const cueHeight = item.example ? sharedCueHeight : 0;
     return 150 + bodyHeight + cueHeight + padding + 14;
   });
   const layout = getRuleGridLayout(bodyTop, model.items, { minHeights });
@@ -1116,7 +1120,7 @@ function drawRule(ctx, model, images, audit) {
     const card = layout.cards[index];
     const isOddLast = model.items.length % 2 === 1 && index === model.items.length - 1;
     const x = isOddLast && model.items.length === 3 ? 306.5 : isOddLast ? 64 : 64 + ((index % 2) * (width + layout.gap));
-    drawRuleCard(ctx, item, images, x, card.y, isOddLast ? 952 : width, card.height, audit, index, density);
+    drawRuleCard(ctx, item, images, x, card.y, isOddLast ? 952 : width, card.height, audit, index, density, sharedCueHeight);
   });
   audit.drawnBlocks = model.items.length;
   audit.contentBottom = layout.contentBottom;

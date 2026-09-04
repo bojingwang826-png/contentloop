@@ -2241,7 +2241,8 @@ app.addEventListener("click", (event) => {
     try {
       const materialized = materializeDynamicProject(state.customProject);
       checkpoint("动态大纲进入逐页编辑前");
-      state.pages = materialized.pages;
+      state.pages = state.contentSource === "dynamic" && state.customProject.editorGeneratedAt
+        ? state.pages : materialized.pages;
       state.currentPageId = materialized.currentPageId;
       state.contentSource = "dynamic";
       state.customProject = {
@@ -2734,6 +2735,12 @@ app.addEventListener("submit", (event) => {
     return;
   }
 
+  const currentEditorPage = state.contentSource === "dynamic" && state.pages.find((page) => page.pageNo === pageNo);
+  if (dynamic && currentEditorPage && (currentEditorPage.locked || currentEditorPage.preservedFields?.length)) {
+    state.outlineEditError = "这一页在第四步已锁定或保留了字段，请先解除保护，再保存大纲修改。";
+    render();
+    return;
+  }
   checkpoint(`修改第 ${pageNo} 页大纲前`);
   const { kicker, title, summary, keyPoints } = result.value;
   if (dynamic) {
@@ -2746,11 +2753,16 @@ app.addEventListener("submit", (event) => {
           title,
           summary,
           keyPoints,
+          contentEdited: true,
         }),
       },
       outlineConfirmed: false,
     };
     state.outlineConfirmed = false;
+    if (state.contentSource === "dynamic") {
+      const freshPage = materializeDynamicProject(state.customProject).pages.find((page) => page.pageNo === pageNo);
+      state.pages = state.pages.map((page) => page.pageNo === pageNo ? freshPage : page);
+    }
   } else {
     const originalPage = state.pages.find((page) => page.pageNo === pageNo);
     state.pages = updateOutlinePage(state.pages, pageNo, {

@@ -446,6 +446,7 @@ export function enrichOutlineWithGameData(outline, topic) {
   const lowCost = entities.filter((item) => Number(item.cost) <= 2).map((item) => item.name);
   const highCost = entities.filter((item) => Number(item.cost) >= 4).map((item) => item.name);
   const pages = outline.pages.map((page) => {
+    if (page.contentEdited) return page;
     if (page.pageNo === 1) return enrichPage(page, {
       summary: `${topic.angle || page.summary} 本篇使用当前赛季真实英雄名单与官方头像。`,
       keyPoints: [`真实成员共 ${entities.length} 名`, `${traitName}效果与开启条件`, "基础建议站位与临场换边"],
@@ -597,7 +598,18 @@ function outlinePageToEditorPage(page, topic, visualPlan) {
       ...base,
       type: "cover",
       featuredEntities: entities,
-      blocks: [{ kind: "chips", items: page.keyPoints.slice(0, 3) }],
+      blocks: [{ kind: "chips", items: page.contentEdited ? [...page.keyPoints] : page.keyPoints.slice(0, 3) }],
+    };
+  }
+  if (page.contentEdited) {
+    return {
+      ...base,
+      contentEdited: true,
+      type: "rule",
+      layoutStyle: "cards",
+      blocks: [{ kind: "steps", items: page.keyPoints.map((point, index) => ({
+        name: shortName(point, index), detail: point, example: "", iconName: "",
+      })) }],
     };
   }
   if (["roster", "board"].includes(page.layoutStyle) && entities.length) {
@@ -639,7 +651,7 @@ function ensureProjectCopyIsDistinct(pages) {
     blocks: (page.blocks || []).map((block) => ({
       ...block,
       items: (block.items || []).map((item) => {
-        if (!item || typeof item !== "object") return item;
+        if (page.contentEdited || !item || typeof item !== "object") return item;
         const next = { ...item };
         for (const property of ["detail", "example", "cue"]) {
           if (!next[property]) continue;

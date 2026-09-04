@@ -413,6 +413,7 @@ function ensureReadableItems(items, kind) {
 
 export function ensureDistinctPageCopy(page) {
   const next = structuredClone(page);
+  if (next.contentEdited) return next;
   next.blocks = (next.blocks || []).map((block) => {
     if (block.kind !== "equipment" && block.kind !== "steps") return block;
     const distinct = ensureDistinctItems(block.items || [], block.kind);
