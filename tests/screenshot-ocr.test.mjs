@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeOcrText, formatOcrResult, extractScreenshotSections, removeConfirmedScreenshot, isScreenshotReviewReady } from "../src/domain/ocr-layout.js";
+import { normalizeOcrText, formatOcrResult, extractScreenshotSections, removeConfirmedScreenshot, isScreenshotReviewReady, usableScreenshotText } from "../src/domain/ocr-layout.js";
 import {
   classifyCommentLines,
   classifyScreenshotText,
@@ -99,4 +99,7 @@ test("删除只移除指定截图，原数组及其他记录不变", () => {
 test("未核对文字不会进入下游 AI", () => {
   assert.equal(isScreenshotReviewReady("排名\n【待核对：2 行小字或图标无法可靠识别】"), false);
   assert.equal(isScreenshotReviewReady("已核对的阵容资料"), true);
+  assert.equal(isScreenshotReviewReady("9月4日阵容排名\n【待核对：2 行小字】"), true);
+  assert.equal(usableScreenshotText("阵容资料\n【待核对：2 行小字】"), "阵容资料");
+  assert.equal(isScreenshotReviewReady("【待核对：20 行小字】"), false);
 });

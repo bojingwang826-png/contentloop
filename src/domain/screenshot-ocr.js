@@ -12,7 +12,7 @@ const categoryMeta = {
   comments: { label: "评论反馈", route: "提炼问题与候选选题" },
 };
 
-function compact(value, max = 6000) {
+function compact(value, max = 30000) {
   return String(value || "").replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
 }
 

@@ -1,4 +1,5 @@
 import { runMockAiTask } from "../src/domain/mock-ai-provider.js";
+import { recognizeVision, validateVisionInput } from "./vision-service.mjs";
 import { validateAiTaskRequest, validateAiTaskResponse } from "../src/domain/ai-contract.js";
 
 const minuteWindow = 60_000;
@@ -459,5 +460,10 @@ assetNeeds 必须为字符串数组，例如 ["本页英雄的官方头像"]；�
     return callOpenAi(rawRequest);
   }
 
-  return { run, status };
+  async function vision(input, { clientId = "local" } = {}) {
+    validateVisionInput(input);
+    consume(clientId);
+    return recognizeVision(input, { apiKey, fetchImpl });
+  }
+  return { run, status, vision };
 }

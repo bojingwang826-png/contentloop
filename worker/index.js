@@ -1,4 +1,5 @@
 import { createAiService } from "../scripts/ai-service.mjs";
+import { MAX_VISION_BYTES } from "../scripts/vision-service.mjs";
 import { fetchGameResearch } from "../scripts/game-research.mjs";
 
 const MAX_JSON_BYTES = 200_000;
@@ -38,12 +39,26 @@ function requireAiAccess(request, env) {
   }
 }
 
-async function readJson(request) {
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_JSON_BYTES) {
-    throw Object.assign(new Error("请求内容过大"), { statusCode: 413 });
+async function readJson(request, limit = MAX_JSON_BYTES) {
+  const reader = request.body?.getReader();
+  if (!reader) return {};
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      throw Object.assign(new Error("请求内容过大"), { statusCode: 413 });
+    }
+    chunks.push(value);
   }
-  return JSON.parse(raw || "{}");
+  const data = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { data.set(chunk, offset); offset += chunk.byteLength; }
+  try { return JSON.parse(new TextDecoder().decode(data) || "{}"); }
+  catch { throw Object.assign(new Error("请求格式不正确"), { statusCode: 400 }); }
 }
 
 function compact(value, max = 1200) {
@@ -275,6 +290,15 @@ export default {
           code: error?.statusCode === 401 ? "AI_ACCESS_DENIED" : error?.statusCode === 429 ? "AI_RATE_LIMITED" : "AI_TASK_FAILED",
           message: error instanceof Error ? error.message : "AI 任务失败，旧内容已保留",
         }, error?.statusCode || 500);
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/api/ai/vision") {
+      try {
+        requireAiAccess(request, env);
+        const input = await readJson(request, MAX_VISION_BYTES + 100);
+        return json(await aiService(env).vision(input, { clientId: request.headers.get("cf-connecting-ip") || "online-demo" }));
+      } catch (error) {
+        return json({ code: "VISION_FAILED", message: error.message || "视觉识别失败" }, error.statusCode || 502);
       }
     }
     if (request.method === "POST" && url.pathname === "/api/sources/extract") {

@@ -11,6 +11,20 @@ export function clearAiAccessCode() {
   aiAccessCode = "";
 }
 
+export async function recognizeScreenshotOnline(file, fetchImpl = globalThis.fetch) {
+  if (!aiAccessCode) throw new Error("请先填写 AI 访问码，再选择图片进行在线识别");
+  if (file.size > 12 * 1024 * 1024) throw new Error("图片请不要超过 12 MB");
+  const image = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("无法读取图片，请重新选择"));
+    reader.readAsDataURL(file);
+  });
+  return requestJson("/api/ai/vision", { method: "POST", headers: {
+    "content-type": "application/json", "x-ai-access-code": aiAccessCode,
+  }, body: JSON.stringify({ image, consent: true }) }, fetchImpl, 115000);
+}
+
 export async function getAiRuntimeStatus(fetchImpl = globalThis.fetch) {
   try {
     return await requestJson("/api/ai/status", { headers: { accept: "application/json" } }, fetchImpl, 8000);

@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAiService } from "./ai-service.mjs";
+import { MAX_VISION_BYTES } from "./vision-service.mjs";
 import { extractPublicSource } from "./source-service.mjs";
 import { fetchGameResearch } from "./game-research.mjs";
 
@@ -42,12 +43,12 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
-async function readJson(request) {
+async function readJson(request, limit = 200_000) {
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 200_000) throw Object.assign(new Error("AI 请求内容过大"), { statusCode: 413 });
+    if (size > limit) throw Object.assign(new Error("AI 请求内容过大"), { statusCode: 413 });
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
@@ -62,6 +63,16 @@ const server = createServer(async (request, response) => {
         accessRequired: Boolean(process.env.DEEPSEEK_API_KEY && process.env.AI_ACCESS_CODE),
         accessProtected: Boolean(process.env.AI_ACCESS_CODE),
       });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/ai/vision") {
+      try {
+        requireAiAccess(request);
+        const payload = await readJson(request, MAX_VISION_BYTES + 100);
+        sendJson(response, 200, await aiService.vision(payload, { clientId: request.socket.remoteAddress || "local" }));
+      } catch (error) {
+        sendJson(response, error.statusCode || 502, { code: "VISION_FAILED", message: error.message || "视觉识别失败" });
+      }
       return;
     }
     if (request.method === "POST" && url.pathname === "/api/ai/tasks") {

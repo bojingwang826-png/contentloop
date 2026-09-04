@@ -64,10 +64,10 @@ import {
   screenshotCategoryOptions,
   screenshotInputContext,
 } from "./domain/screenshot-ocr.js";
-import { clearAiAccessCode, getAiRuntimeStatus, researchGameTopic, runAiTask, setAiAccessCode } from "./services/ai-client.js";
+import { clearAiAccessCode, getAiRuntimeStatus, researchGameTopic, runAiTask, setAiAccessCode, recognizeScreenshotOnline } from "./services/ai-client.js";
 import { extractPublicSource } from "./services/source-client.js";
 import { createLowResolutionPreview, recognizeScreenshot } from "./services/screenshot-ocr-client.js";
-import { removeConfirmedScreenshot, isScreenshotReviewReady } from "./domain/ocr-layout.js";
+import { removeConfirmedScreenshot, isScreenshotReviewReady, usableScreenshotText } from "./domain/ocr-layout.js";
 
 const project = parseProject(sampleProject);
 const storageKey = "game-note-studio-phase-a-v2";
@@ -508,7 +508,7 @@ function renderScreenshotInsights(capture) {
   const commentCount = Object.values(derived.commentGroups).reduce((total, items) => total + items.length, 0);
   return `<div class="ocr-insight-grid" aria-live="polite">
     <article><small>系统判断</small><strong>${escapeHtml(derived.categoryLabel)}</strong><span>${escapeHtml(derived.route)}</span></article>
-    <article><small>OCR 置信度（非准确率）</small><strong>${capture.ocrConfidence ? `${capture.ocrConfidence}%` : "待手动核对"}</strong><span>${capture.uncertainLines ? `${capture.uncertainLines} 行待核对，请上传原图或裁剪小字区域` : "请对照原图核对名称和数字"}</span></article>
+    <article><small>${capture.provider === "deepseek-vision" ? "DeepSeek 视觉识别" : "OCR 置信度（非准确率）"}</small><strong>${capture.provider === "deepseek-vision" ? "已读图 · 待核对" : capture.ocrConfidence ? `${capture.ocrConfidence}%` : "待手动核对"}</strong><span>${capture.uncertainLines ? `${capture.uncertainLines} 处待核对` : "请对照原图核对名称和数字"}</span></article>
     <article><small>结构化结果</small><strong>${metrics.length + derived.equipment.length + commentCount + derived.sections.length} 项</strong><span>${derived.sections.length ? `${derived.sections.length} 个排名分组（保留各组正文）` : metrics.length ? metrics.map(([key, value]) => `${metricLabels[key]} ${value}`).join(" · ") : derived.equipment.length ? derived.equipment.join(" · ") : commentCount ? `${commentCount} 条评论线索` : "可直接编辑识别正文"}</span></article>
   </div>`;
 }
@@ -519,15 +519,15 @@ function renderScreenshotOcr() {
   const editable = ["ready", "failed"].includes(capture.status);
   const recent = state.confirmedScreenshots.slice(-3).reverse();
   return `<section class="panel screenshot-ocr-panel" aria-labelledby="screenshot-ocr-title">
-    <div class="section-title"><div><p class="eyebrow">截图识别</p><h2 id="screenshot-ocr-title">上传截图，确认后再使用</h2></div><span class="status-pill ${processing ? "warning" : capture.status === "ready" ? "success" : "neutral"}">${processing ? `识别中 ${capture.progress}%` : capture.status === "ready" ? "待确认" : "本地 OCR"}</span></div>
+    <div class="section-title"><div><p class="eyebrow">截图识别</p><h2 id="screenshot-ocr-title">上传截图，确认后再使用</h2></div><span class="status-pill ${processing ? "warning" : capture.status === "ready" ? "success" : "neutral"}">${processing ? capture.provider === "deepseek-vision" ? "DeepSeek 正在读图，请稍候" : `识别中 ${capture.progress}%` : capture.status === "ready" ? "待确认" : "在线视觉 / 本地 OCR"}</span></div>
     <div class="ocr-workspace">
       <div class="ocr-upload-column">
         <label class="ocr-dropzone ${capture.preview ? "has-preview" : ""}" for="screenshot-file">
           ${capture.preview ? `<img src="${escapeHtml(capture.preview)}" alt="待确认截图低清预览" />` : `${icon("search")}<strong>选择一张截图</strong><span>支持 PNG、JPG、WebP，单张不超过 12 MB</span>`}
           <input class="sr-only" id="screenshot-file" type="file" accept="image/png,image/jpeg,image/webp" data-field="screenshotFile" ${processing ? "disabled" : ""} />
         </label>
-        <p class="helper-text">文字在当前设备识别；原始高清图不写入本地草稿，仅保留低清预览和你确认后的结果。</p>
-        ${processing ? `<div class="ocr-progress" role="progressbar" aria-label="截图文字识别进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${capture.progress}"><span style="width:${capture.progress}%"></span></div>` : ""}
+        <p class="helper-text">选择图片后可同意使用 DeepSeek 视觉识别（图片发送至 DeepSeek，产生 API 费用），或取消并仅在本机识别。本站草稿只保存低清预览和文字，不保存高清原图。</p>
+        ${processing ? capture.provider === "deepseek-vision" ? `<p role="status">正在上传并读取图片中的标题、正文和小字，通常需要数十秒，请勿重复操作。</p>` : `<div class="ocr-progress" role="progressbar" aria-label="截图文字识别进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${capture.progress}"><span style="width:${capture.progress}%"></span></div>` : ""}
         ${capture.error ? `<div class="ocr-error" role="alert">${icon("warning")}<span><strong>自动识别没有完成</strong><small>${escapeHtml(capture.error)}。你仍可在右侧手动输入后确认使用。</small></span></div>` : ""}
       </div>
       <div class="ocr-review-column">
@@ -539,8 +539,9 @@ function renderScreenshotOcr() {
           <label for="screenshot-text">识别正文</label>
           <textarea id="screenshot-text" data-field="screenshotText" rows="8" placeholder="自动识别失败时，可把截图中的关键文字手动输入这里">${escapeHtml(capture.text)}</textarea>
           ${capture.text.trim() ? renderScreenshotInsights(capture) : `<p class="ocr-empty-result">还没有识别到文字。可以手动输入至少 4 个字，再确认使用。</p>`}
+          ${capture.uncertain?.length ? `<p class="helper-text">模型标记的不确定位置：${capture.uncertain.map(escapeHtml).join("；")}</p>` : ""}
           ${capture.rawText ? `<details class="ocr-raw"><summary>查看原始识别文字（可能有误，仅供核对）</summary><pre>${escapeHtml(capture.rawText)}</pre></details>` : ""}
-          <p class="helper-text">有“待核对”行时，请对照原图补充文字，或删除不需要的行后再确认。识别不会根据头像猜英雄名称。</p>
+          <p class="helper-text">可以先修改正文，也可以直接确认已识别的文字。有“待核对”行时会再次询问，未识别部分不会让 AI 猜测补全。</p>
           <button class="button primary full" type="button" data-action="confirm-screenshot" ${!isScreenshotReviewReady(capture.text) ? "disabled" : ""}>${icon("check")}确认识别结果并继续分析</button>`
           : `<div class="ocr-placeholder"><span>${icon("shield")}</span><strong>AI 先识别，你再确认</strong><p>游戏资料会进入候选选题；发布数据进入待复盘记录；评论会提炼问题、反对意见和新选题。</p></div>`}
       </div>
@@ -1440,9 +1441,21 @@ async function readScreenshot(file) {
     showToast("单张截图请不要超过 12 MB");
     return;
   }
+  const useVision = window.confirm("使用 DeepSeek 视觉模型识别这张图片？图片将发送给 DeepSeek，并产生 API 费用。点击“确定”在线识别；点击“取消”仅在本机识别。");
+  if (useVision) {
+    const latestCode = (document.querySelector('[data-field="aiAccessCode"]')?.value || aiAccessCodeDraft).trim();
+    if (latestCode) {
+      setAiAccessCode(latestCode);
+      aiAccessCodeSet = true;
+      aiAccessCodeDraft = "";
+      try { sessionStorage.setItem("chanyou-ai-access-code", latestCode); } catch { /* Keep in memory. */ }
+    }
+    if (!aiAccessCodeSet) { showToast("请先输入 AI 访问码，再选择图片"); return; }
+  }
   state.screenshotCapture = {
     ...structuredClone(defaultState.screenshotCapture),
     status: "processing",
+    provider: useVision ? "deepseek-vision" : "local-ocr",
     fileName: file.name,
     title: file.name.replace(/\.[^.]+$/, "").slice(0, 80),
     progress: 1,
@@ -1451,7 +1464,7 @@ async function readScreenshot(file) {
   try {
     state.screenshotCapture.preview = await createLowResolutionPreview(file);
     render();
-    const result = await recognizeScreenshot(file, ({ progress }) => {
+    const result = useVision ? await recognizeScreenshotOnline(file) : await recognizeScreenshot(file, ({ progress }) => {
       state.screenshotCapture.progress = Math.max(state.screenshotCapture.progress, progress || 1);
       const bar = document.querySelector(".ocr-progress");
       const fill = bar?.querySelector("span");
@@ -1468,6 +1481,8 @@ async function readScreenshot(file) {
       title: result.title || state.screenshotCapture.title,
       rawText: result.rawText,
       uncertainLines: result.uncertainLines,
+      uncertain: result.uncertain || [],
+      provider: result.provider || "local-ocr",
       category: derived.category,
       ocrConfidence: result.confidence,
       progress: 100,
@@ -1482,7 +1497,7 @@ async function readScreenshot(file) {
       status: "failed",
       category: state.screenshotCapture.category || "game_knowledge",
       progress: 0,
-      error: error instanceof Error ? error.message : "本地 OCR 运行失败",
+      error: error instanceof Error ? error.message : "截图识别失败",
     };
     saveState();
     render();
@@ -1515,11 +1530,13 @@ function deleteConfirmedScreenshot(id) {
 async function confirmScreenshotCapture() {
   const capture = state.screenshotCapture;
   if (!isScreenshotReviewReady(capture.text) || capture.status === "processing") {
-    showToast("请先补充或删除待核对行，再确认至少 4 个字的正文");
+    showToast("请至少输入或保留 4 个字的识别正文；只有待核对提示时还不能分析");
     document.querySelector("#screenshot-text")?.focus();
     return;
   }
-  const record = createConfirmedScreenshotRecord(capture);
+  const usableText = usableScreenshotText(capture.text);
+  if ((usableText !== capture.text.trim() || capture.uncertain?.length) && !window.confirm("图片还有未识别的部分。是否只使用当前已识别、且你已核对的文字继续分析？未识别内容不会自动补写。")) return;
+  const record = createConfirmedScreenshotRecord({ ...capture, text: usableText });
   state.confirmedScreenshots = [...state.confirmedScreenshots, record].slice(-12);
   // 每次确认截图都以当前截图作为新分析输入，避免旧网址或旧截图继续污染候选主题。
   state.sourceInput = screenshotInputContext(record);

@@ -52,5 +52,9 @@ export function removeConfirmedScreenshot(records, id) {
 }
 
 export function isScreenshotReviewReady(text) {
-  return String(text || "").trim().length >= 4 && !String(text).includes("【待核对：");
+  return usableScreenshotText(text).length >= 4;
+}
+
+export function usableScreenshotText(text) {
+  return String(text || "").replace(/【待核对[：:][^】]*】/g, "").replace(/\n{3,}/g, "\n\n").trim();
 }
