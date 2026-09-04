@@ -20,6 +20,7 @@ test("视觉请求发送原始图片，指定视觉模型，不将图片作为�
     const body = JSON.parse(options.body);
     assert.equal(body.model, VISION_MODEL);
     assert.equal(body.store, false);
+    assert.deepEqual(body.reasoning, { effort: "none" }, "图片转录必须显式关闭默认深度思考，避免耗尽托管连接时间");
     assert.deepEqual(body.input[0].content[1], { type: "input_image", image_url: image, detail: "original" });
     assert.equal(body.text.format.type, "json_schema");
     return response();
