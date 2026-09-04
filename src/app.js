@@ -1464,7 +1464,10 @@ async function readScreenshot(file) {
   try {
     state.screenshotCapture.preview = await createLowResolutionPreview(file);
     render();
-    const result = useVision ? await recognizeScreenshotOnline(file) : await recognizeScreenshot(file, ({ progress }) => {
+    const result = useVision ? await recognizeScreenshotOnline(file, globalThis.fetch, (message) => {
+      const badge = document.querySelector(".screenshot-ocr-panel .section-title .status-pill");
+      if (badge) badge.textContent = message;
+    }) : await recognizeScreenshot(file, ({ progress }) => {
       state.screenshotCapture.progress = Math.max(state.screenshotCapture.progress, progress || 1);
       const bar = document.querySelector(".ocr-progress");
       const fill = bar?.querySelector("span");

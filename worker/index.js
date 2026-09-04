@@ -1,5 +1,6 @@
 import { createAiService } from "../scripts/ai-service.mjs";
 import { MAX_VISION_BYTES } from "../scripts/vision-service.mjs";
+import { visionStream } from "../scripts/vision-stream.mjs";
 import { fetchGameResearch } from "../scripts/game-research.mjs";
 
 const MAX_JSON_BYTES = 200_000;
@@ -296,6 +297,9 @@ export default {
       try {
         requireAiAccess(request, env);
         const input = await readJson(request, MAX_VISION_BYTES + 100);
+        if (request.headers.get("accept")?.includes("application/x-ndjson")) {
+          return visionStream((signal) => aiService(env).vision(input, { signal, clientId: request.headers.get("cf-connecting-ip") || "online-demo" }));
+        }
         return json(await aiService(env).vision(input, { clientId: request.headers.get("cf-connecting-ip") || "online-demo" }));
       } catch (error) {
         return json({ code: "VISION_FAILED", message: error.message || "视觉识别失败" }, error.statusCode || 502);

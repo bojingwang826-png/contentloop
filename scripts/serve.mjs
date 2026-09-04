@@ -4,6 +4,7 @@ import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAiService } from "./ai-service.mjs";
 import { MAX_VISION_BYTES } from "./vision-service.mjs";
+import { visionStream } from "./vision-stream.mjs";
 import { extractPublicSource } from "./source-service.mjs";
 import { fetchGameResearch } from "./game-research.mjs";
 
@@ -69,6 +70,16 @@ const server = createServer(async (request, response) => {
       try {
         requireAiAccess(request);
         const payload = await readJson(request, MAX_VISION_BYTES + 100);
+        if (request.headers.accept?.includes("application/x-ndjson")) {
+          const stream = visionStream((signal) => aiService.vision(payload, { signal, clientId: request.socket.remoteAddress || "local" }));
+          response.writeHead(200, Object.fromEntries(stream.headers));
+          response.flushHeaders();
+          const reader = stream.body.getReader();
+          response.on("close", () => { void reader.cancel().catch(() => {}); });
+          while (true) { const { done, value } = await reader.read(); if (done) break; response.write(value); }
+          response.end();
+          return;
+        }
         sendJson(response, 200, await aiService.vision(payload, { clientId: request.socket.remoteAddress || "local" }));
       } catch (error) {
         sendJson(response, error.statusCode || 502, { code: "VISION_FAILED", message: error.message || "视觉识别失败" });

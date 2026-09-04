@@ -460,10 +460,10 @@ assetNeeds 必须为字符串数组，例如 ["本页英雄的官方头像"]；�
     return callOpenAi(rawRequest);
   }
 
-  async function vision(input, { clientId = "local" } = {}) {
+  async function vision(input, { clientId = "local", signal } = {}) {
     validateVisionInput(input);
     consume(clientId);
-    return recognizeVision(input, { apiKey, fetchImpl });
+    return recognizeVision(input, { apiKey, fetchImpl, signal });
   }
   return { run, status, vision };
 }

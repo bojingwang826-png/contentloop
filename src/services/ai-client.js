@@ -1,4 +1,5 @@
 import { requestJson } from "./request-json.js";
+import { requestVision } from "./vision-transport.js";
 import { validateAiTaskResponse } from "../domain/ai-contract.js";
 
 let aiAccessCode = "";
@@ -11,7 +12,7 @@ export function clearAiAccessCode() {
   aiAccessCode = "";
 }
 
-export async function recognizeScreenshotOnline(file, fetchImpl = globalThis.fetch) {
+export async function recognizeScreenshotOnline(file, fetchImpl = globalThis.fetch, onProgress = () => {}) {
   if (!aiAccessCode) throw new Error("请先填写 AI 访问码，再选择图片进行在线识别");
   if (file.size > 12 * 1024 * 1024) throw new Error("图片请不要超过 12 MB");
   const image = await new Promise((resolve, reject) => {
@@ -20,9 +21,9 @@ export async function recognizeScreenshotOnline(file, fetchImpl = globalThis.fet
     reader.onerror = () => reject(new Error("无法读取图片，请重新选择"));
     reader.readAsDataURL(file);
   });
-  return requestJson("/api/ai/vision", { method: "POST", headers: {
+  return requestVision({ method: "POST", headers: {
     "content-type": "application/json", "x-ai-access-code": aiAccessCode,
-  }, body: JSON.stringify({ image, consent: true }) }, fetchImpl, 115000);
+  }, body: JSON.stringify({ image, consent: true }) }, fetchImpl, onProgress);
 }
 
 export async function getAiRuntimeStatus(fetchImpl = globalThis.fetch) {
