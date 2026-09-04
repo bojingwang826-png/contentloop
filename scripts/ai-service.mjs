@@ -72,6 +72,22 @@ function normalizeUnderstandResult(result, request, payload) {
   return { ...result, sources, facts };
 }
 
+function referenceIdsSchema(ids, maxItems) {
+  return { type: "array", maxItems: ids.length ? maxItems : 0,
+    items: ids.length ? { type: "string", enum: ids } : { type: "string" } };
+}
+
+function normalizeOutlineFormat(result, request) {
+  if (request.taskType !== "generate_outline" || !Array.isArray(result?.pages)) return result;
+  return { ...result, pages: result.pages.map((page) => {
+    // Only repair an unambiguous string-list representation; never drop invented facts.
+    if (!page || typeof page !== "object") return page;
+    const assets = typeof page.assetNeeds === "string" ? [page.assetNeeds] : page.assetNeeds;
+    return { ...page, assetNeeds: Array.isArray(assets)
+      ? assets.map((item) => typeof item === "string" ? item.trim() : item).filter((item) => item !== "") : assets };
+  }) };
+}
+
 function resultSchema(request) {
   if (request.taskType === "understand_input") {
     return {
@@ -172,8 +188,8 @@ function resultSchema(request) {
               fit: { type: "string", minLength: 1, maxLength: 180 },
               risk: { type: "string", minLength: 1, maxLength: 180 },
               recommended: { type: "boolean" },
-              factIds: { type: "array", items: { type: "string", enum: request.allowedFactIds }, maxItems: 8 },
-              sourceIds: { type: "array", items: { type: "string", enum: request.allowedSourceIds }, maxItems: 5 },
+              factIds: referenceIdsSchema(request.allowedFactIds, 8),
+              sourceIds: referenceIdsSchema(request.allowedSourceIds, 5),
             },
           },
         },
@@ -215,7 +231,7 @@ function resultSchema(request) {
               title: { type: "string", minLength: 1, maxLength: 90 },
               summary: { type: "string", minLength: 1, maxLength: 260 },
               keyPoints: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 120 } },
-              factIds: { type: "array", maxItems: 8, items: { type: "string", enum: request.allowedFactIds } },
+              factIds: referenceIdsSchema(request.allowedFactIds, 8),
               assetNeeds: { type: "array", maxItems: 5, items: { type: "string", minLength: 1, maxLength: 100 } },
             },
           },
@@ -342,7 +358,11 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
       try {
         const requestBody = {
           model,
-          instructions: "输出必须严格匹配 JSON Schema。只返回一个 JSON 对象，不要使用 Markdown 代码块，不要添加解释、前言或结尾。",
+          instructions: `输出必须严格匹配 JSON Schema。只返回一个 JSON 对象，不要使用 Markdown 代码块，不要添加解释、前言或结尾。
+事实 ID 白名单：${JSON.stringify(request.allowedFactIds)}。来源 ID 白名单：${JSON.stringify(request.allowedSourceIds)}。
+factIds/sourceIds 只能逐字使用对应白名单中的 ID，不能使用标题、英雄名、序号或自行编造的 ID；白名单为空时必须返回 []。不得通过伪造引用支持新事实。
+assetNeeds 必须为字符串数组，例如 ["本页英雄的官方头像"]；不需要素材时返回 []，不能返回对象、null 或空字符串。
+完整输出结构：${JSON.stringify(resultSchema(request))}`,
           input: `${modelInput(request)}${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，只输出合法 JSON 对象，不要再次返回相同结构。` : ""}`,
           reasoning: { effort: "none" },
           max_output_tokens: outputBudget,
@@ -376,7 +396,7 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
           outputBudget = Math.min(12000, outputBudget * 2);
           throw new Error("模型输出未完成，请在预算内返回完整字段和合法 JSON");
         }
-        const result = normalizeUnderstandResult(parseStructuredOutput(extractOutputText(payload)), request, payload);
+        const result = normalizeOutlineFormat(normalizeUnderstandResult(parseStructuredOutput(extractOutputText(payload)), request, payload), request);
         const response = {
           taskId: request.taskId,
           schemaVersion: 1,
@@ -400,7 +420,7 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
           unknowns: new Set(["understand_input", "build_research_brief"]).has(request.taskType) ? result.questions : [],
         };
         const checked = validateAiTaskResponse(response, request);
-        if (!checked.success) throw new Error(checked.issues.join("；"));
+        if (!checked.success) throw new Error([...new Set(checked.issues)].join("；"));
         return response;
       } catch (error) {
         lastError = error;

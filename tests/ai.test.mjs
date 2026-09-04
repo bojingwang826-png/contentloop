@@ -183,6 +183,58 @@ test("动态研究和大纲使用严格结构化输出但不会重复联网检�
   assert.equal(sent[1].text.format.schema.properties.pages.minItems, 7);
 });
 
+test("大纲无事实时发送合法空白名单约束并兼容单条素材字符串", async () => {
+  const analysis = runMockAiTask(createUnderstandInputRequest("装备合成教程", "", "empty-facts")).result;
+  const research = runMockAiTask(createResearchBriefRequest(analysis.topics[0], analysis)).result;
+  research.viewpoints.forEach((viewpoint) => { viewpoint.factIds = []; viewpoint.sourceIds = []; });
+  const request = createOutlineRequest(analysis.topics[0], research, research.recommendedViewpointId);
+  const result = runMockAiTask(request).result;
+  result.pages.forEach((page, i) => { page.factIds = []; page.assetNeeds = i === 0 ? "官方头像" : ""; });
+  let sent;
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test" }, fetchImpl: async (_url, options) => {
+    sent = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ output_text: JSON.stringify(result) }) };
+  } });
+  const response = await service.run(request);
+  assert.match(sent.instructions, /事实 ID 白名单：\[\]/);
+  const schema = sent.text.format.schema.properties.pages.items.properties.factIds;
+  assert.equal(schema.maxItems, 0);
+  assert.equal("enum" in schema.items, false);
+  assert.deepEqual(response.result.pages[0].assetNeeds, ["官方头像"]);
+  assert.deepEqual(response.result.pages[1].assetNeeds, []);
+});
+
+test("大纲错误引用不会被静默删除，重试携带约束并接受正确结果", async () => {
+  const analysis = runMockAiTask(createUnderstandInputRequest("装备教程", "", "retry-outline")).result;
+  const research = runMockAiTask(createResearchBriefRequest(analysis.topics[0], analysis)).result;
+  const request = createOutlineRequest(analysis.topics[0], research, research.recommendedViewpointId);
+  const good = runMockAiTask(request).result;
+  const bad = structuredClone(good);
+  bad.pages.forEach((page) => { page.factIds = ["invented-fact"]; page.assetNeeds = { description: "头像" }; });
+  const sent = [];
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test" }, fetchImpl: async (_url, options) => {
+    sent.push(JSON.parse(options.body));
+    return { ok: true, json: async () => ({ output_text: JSON.stringify(sent.length === 1 ? bad : good) }) };
+  } });
+  assert.deepEqual((await service.run(request)).result, good);
+  assert.equal(sent.length, 2);
+  assert.ok(sent[0].instructions.includes(JSON.stringify(request.allowedFactIds)));
+  assert.match(sent[1].input, /未允许的事实/);
+  assert.equal(sent[1].input.split("大纲素材需求无效").length - 1, 1);
+});
+
+test("大纲持续返回未知事实仍失败而非假装生成成功", async () => {
+  const analysis = runMockAiTask(createUnderstandInputRequest("装备教程", "", "reject-outline")).result;
+  const research = runMockAiTask(createResearchBriefRequest(analysis.topics[0], analysis)).result;
+  const request = createOutlineRequest(analysis.topics[0], research, research.recommendedViewpointId);
+  const result = runMockAiTask(request).result;
+  result.pages[0].factIds = ["invented-fact"];
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test" }, fetchImpl: async () => ({
+    ok: true, json: async () => ({ output_text: JSON.stringify(result) }),
+  }) });
+  await assert.rejects(() => service.run(request), /未允许的事实/);
+});
+
 test("字段重写请求只暴露允许修改且未保留的文字", () => {
   const request = createRewriteFieldsRequest(pageFixture(), "更像朋友安利", "rewrite-test");
   const paths = request.input.fields.map((field) => field.path);
