@@ -41,8 +41,9 @@ export function sourceIndependenceKey(value) {
 
 export function normalizeSourceCard(source, index = 0) {
   const legacyStatus = source?.status || "user_provided";
-  const extractionStatus = source?.extractionStatus
-    || (legacyStatus === "found" ? "extracted" : legacyStatus === "unavailable" ? "failed" : "pending");
+  const inferredFailure = source?.extractionStatus === "failed" && legacyStatus === "unavailable" && !source?.failureReason;
+  const extractionStatus = (inferredFailure ? "pending" : source?.extractionStatus)
+    || (legacyStatus === "found" ? "extracted" : "pending");
   const url = compact(source?.url, 1000);
   return {
     id: compact(source?.id, 80) || `source-${index + 1}`,

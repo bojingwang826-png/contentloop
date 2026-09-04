@@ -486,6 +486,60 @@ test("在线模型在 JSON 前后添加说明时仍能提取对象", async () =>
   assert.deepEqual(response.result, result);
 });
 
+test("临时服务错误自动等待后重试，非 JSON 错误页不会被误报格式错误", async () => {
+  const request = createPublishCopyRequest(sampleProject.exportCopy.body, "更自然", "transient");
+  const result = { body: sampleProject.exportCopy.body, summary: "已调整", mode: "matched" };
+  let calls = 0;
+  const waits = [];
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test" }, sleep: async (ms) => waits.push(ms),
+    fetchImpl: async (_url, options) => {
+      assert.ok(options.signal);
+      if (++calls === 1) return { ok: false, status: 503 };
+      const raw = JSON.stringify(result);
+      return { ok: true, json: async () => ({ output: [{ content: [
+        { type: "output_text", text: raw.slice(0, 25) }, { type: "output_text", text: raw.slice(25) },
+      ] }] }) };
+    },
+  });
+  assert.deepEqual((await service.run(request)).result, result);
+  assert.equal(calls, 2);
+  assert.deepEqual(waits, [800]);
+});
+
+test("模型配置错误不盲目重试也不泄露服务端错误详情", async () => {
+  let calls = 0;
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test" }, fetchImpl: async () => {
+    calls += 1;
+    return { ok: false, status: 401, json: async () => ({ error: { message: "secret-provider-detail" } }) };
+  } });
+  await assert.rejects(() => service.run(createPublishCopyRequest(sampleProject.exportCopy.body, "更自然")), /服务配置或账户状态异常/);
+  assert.equal(calls, 1);
+});
+
+test("输出截断会增加预算重试，完整响应才允许应用", async () => {
+  const request = createRewriteFieldsRequest(pageFixture(), "更自然", "budget");
+  const budgets = [];
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test" }, fetchImpl: async (_url, options) => {
+    budgets.push(JSON.parse(options.body).max_output_tokens);
+    if (budgets.length === 1) return { ok: true, json: async () => ({ status: "incomplete", output_text: "{" }) };
+    return { ok: true, json: async () => ({ output_text: JSON.stringify({ pageId: request.input.pageId,
+      changes: [{ path: "subtitle", value: "先检查装备能否解决当前短板，再决定这一回合怎么花钱。" }], summary: "改写说明", mode: "matched" }) }) };
+  } });
+  await service.run(request);
+  assert.ok(budgets[0] >= 3000);
+  assert.ok(budgets[1] > budgets[0]);
+});
+
+test("连接超时自动重试一次后给出网络原因并保留旧稿", async () => {
+  let calls = 0;
+  const service = createAiService({ env: { DEEPSEEK_API_KEY: "test" }, sleep: async () => {}, fetchImpl: async () => {
+    calls += 1;
+    throw Object.assign(new Error("timeout"), { name: "TimeoutError" });
+  } });
+  await assert.rejects(() => service.run(createPublishCopyRequest(sampleProject.exportCopy.body, "更自然")), /连接超时.*已保留/);
+  assert.equal(calls, 2);
+});
+
 test("演示模式不消耗在线额度", async () => {
   const request = createPublishCopyRequest(sampleProject.exportCopy.body, "精简一点", "publish-limit");
   const service = createAiService({ env: { AI_REQUESTS_PER_MINUTE: "1", AI_REQUESTS_PER_DAY: "2" } });

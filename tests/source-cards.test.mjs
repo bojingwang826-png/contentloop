@@ -9,6 +9,16 @@ import {
   updateSourceCard,
 } from "../src/domain/source-cards.js";
 
+test("未检索确认不等于解析失败，兼容旧误标记但保留真实失败原因", () => {
+  const sources = normalizeSourceCards([
+    { id: "new", status: "unavailable" },
+    { id: "legacy", status: "unavailable", extractionStatus: "failed" },
+    { id: "failed", status: "unavailable", extractionStatus: "failed", failureReason: "网页要求登录" },
+  ]);
+  assert.deepEqual(sources.map((source) => source.extractionStatus), ["pending", "pending", "failed"]);
+  assert.ok(sources.every((source) => !source.confirmed));
+});
+
 test("来源标准化会保留非公开展示标记", () => {
   const [source] = normalizeSourceCards([{ id: "private", url: "https://example.com/post", publicDisplay: false, retrievalMethod: "private_reference" }]);
   assert.equal(source.publicDisplay, false);

@@ -6,12 +6,13 @@ const dayWindow = 86_400_000;
 
 function extractOutputText(payload) {
   if (typeof payload?.output_text === "string") return payload.output_text;
+  const chunks = [];
   for (const item of payload?.output || []) {
     for (const part of item?.content || []) {
-      if (part?.type === "output_text" && typeof part.text === "string") return part.text;
+      if (part?.type === "output_text" && typeof part.text === "string") chunks.push(part.text);
     }
   }
-  return "";
+  return chunks.join("");
 }
 
 function parseStructuredOutput(value) {
@@ -303,7 +304,7 @@ function modelInput(request) {
   return `${common}\n正文保持朋友安利型、手机短段落和轻量 emoji；资料不足时使用资料整理口吻。\n任务输入：${JSON.stringify(request.input)}`;
 }
 
-export function createAiService({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
+export function createAiService({ env = process.env, fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
   const apiKey = String(env.DEEPSEEK_API_KEY || "").trim();
   const model = String(env.DEEPSEEK_MODEL || "deepseek-v4-flash").trim();
   const minuteLimit = Number(env.AI_REQUESTS_PER_MINUTE || 6);
@@ -333,6 +334,10 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
 
   async function callOpenAi(request) {
     let lastError;
+    // Reserve space for every editable field, including JSON keys and search output.
+    let outputBudget = request.taskType === "rewrite_fields"
+      ? Math.min(8000, Math.max(3000, (request.input.fields.length * 650) + 600))
+      : new Set(["understand_input", "build_research_brief", "generate_outline"]).has(request.taskType) ? 5000 : 1800;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const requestBody = {
@@ -340,7 +345,7 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
           instructions: "输出必须严格匹配 JSON Schema。只返回一个 JSON 对象，不要使用 Markdown 代码块，不要添加解释、前言或结尾。",
           input: `${modelInput(request)}${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，只输出合法 JSON 对象，不要再次返回相同结构。` : ""}`,
           reasoning: { effort: "none" },
-          max_output_tokens: new Set(["understand_input", "build_research_brief", "generate_outline"]).has(request.taskType) ? 3000 : 1800,
+          max_output_tokens: outputBudget,
           text: { format: { type: "json_schema", name: request.taskType, schema: resultSchema(request) } },
         };
         const needsWebSearch = request.taskType === "extract_source"
@@ -357,9 +362,20 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
           method: "POST",
           headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
           body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(55_000),
         });
+        if (!apiResponse.ok) {
+          const retryable = [408, 429, 500, 502, 503, 504].includes(apiResponse.status);
+          // Do not expose provider messages, which may contain internal request details.
+          throw Object.assign(new Error(retryable
+            ? "DeepSeek 服务暂时繁忙"
+            : "DeepSeek 服务配置或账户状态异常，请管理员检查模型、密钥和余额"), { retryable, providerFailure: true });
+        }
         const payload = await apiResponse.json();
-        if (!apiResponse.ok) throw new Error(payload?.error?.message || "DeepSeek 请求失败");
+        if (payload.status === "incomplete" || payload.incomplete_details) {
+          outputBudget = Math.min(12000, outputBudget * 2);
+          throw new Error("模型输出未完成，请在预算内返回完整字段和合法 JSON");
+        }
         const result = normalizeUnderstandResult(parseStructuredOutput(extractOutputText(payload)), request, payload);
         const response = {
           taskId: request.taskId,
@@ -388,7 +404,15 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
         return response;
       } catch (error) {
         lastError = error;
+        if (error.retryable === false) break;
+        if (attempt === 0 && (error.providerFailure || error instanceof TypeError || ["TimeoutError", "AbortError"].includes(error.name))) {
+          await sleep(800);
+        }
       }
+    }
+    if (lastError?.providerFailure) throw Object.assign(new Error(`${lastError.message}；原大纲和修改意见已保留。`), { statusCode: 502 });
+    if (lastError instanceof TypeError || ["TimeoutError", "AbortError"].includes(lastError?.name)) {
+      throw Object.assign(new Error("AI 连接超时或网络中断，自动重试后仍未恢复；原大纲和修改意见已保留。"), { statusCode: 504 });
     }
     throw Object.assign(new Error(`在线 AI 连续两次未通过检查：${lastError?.message || "未知错误"}；旧内容已保留。`), { statusCode: 502 });
   }
