@@ -278,6 +278,17 @@ function resultSchema(request) {
   };
 }
 
+function unwrapTaskResult(value, request) {
+  const required = resultSchema(request).required;
+  const hasFields = (item) => item && typeof item === "object" && !Array.isArray(item) && required.every((key) => key in item);
+  if (hasFields(value)) return value;
+  // Some models add an envelope even when asked for a bare result. Validate it later.
+  if (hasFields(value?.result)) return value.result;
+  if (hasFields(value?.data)) return value.data;
+  if (value?.type === "object" && value?.properties) throw new Error("返回了 JSON Schema 而不是业务结果。请填写实际内容，只返回业务字段，不要返回 type/properties/required。");
+  return value;
+}
+
 function modelInput(request) {
   const common = "你是金铲铲小红书图文编辑。只改写用户允许的文字，不新增精确数字、胜率、登场率、上分承诺、个人实测或未经输入支持的事实。不要照抄修改指令。";
   if (request.taskType === "understand_input") {
@@ -362,8 +373,8 @@ export function createAiService({ env = process.env, fetchImpl = globalThis.fetc
 事实 ID 白名单：${JSON.stringify(request.allowedFactIds)}。来源 ID 白名单：${JSON.stringify(request.allowedSourceIds)}。
 factIds/sourceIds 只能逐字使用对应白名单中的 ID，不能使用标题、英雄名、序号或自行编造的 ID；白名单为空时必须返回 []。不得通过伪造引用支持新事实。
 assetNeeds 必须为字符串数组，例如 ["本页英雄的官方头像"]；不需要素材时返回 []，不能返回对象、null 或空字符串。
-完整输出结构：${JSON.stringify(resultSchema(request))}`,
-          input: `${modelInput(request)}${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，只输出合法 JSON 对象，不要再次返回相同结构。` : ""}`,
+以下是校验规则，不是要复制的答案：${JSON.stringify(resultSchema(request))}。请生成符合规则的业务数据，不要输出 Schema 本身，不要加 result/data 包装。`,
+          input: `${modelInput(request)}\n最终 JSON 顶层必须直接包含这些业务字段：${resultSchema(request).required.join(", ")}。每个字段填入本次任务的实际内容。${attempt > 0 && lastError ? `\n上一次输出因以下问题被拒绝：${lastError.message}。这次必须逐项修正，只输出合法 JSON 对象，不要再次返回相同结构。` : ""}`,
           reasoning: { effort: "none" },
           max_output_tokens: outputBudget,
           text: { format: { type: "json_schema", name: request.taskType, schema: resultSchema(request) } },
@@ -396,7 +407,7 @@ assetNeeds 必须为字符串数组，例如 ["本页英雄的官方头像"]；�
           outputBudget = Math.min(12000, outputBudget * 2);
           throw new Error("模型输出未完成，请在预算内返回完整字段和合法 JSON");
         }
-        const result = normalizeOutlineFormat(normalizeUnderstandResult(parseStructuredOutput(extractOutputText(payload)), request, payload), request);
+        const result = normalizeOutlineFormat(normalizeUnderstandResult(unwrapTaskResult(parseStructuredOutput(extractOutputText(payload)), request), request, payload), request);
         const response = {
           taskId: request.taskId,
           schemaVersion: 1,

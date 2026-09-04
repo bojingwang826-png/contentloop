@@ -388,7 +388,7 @@ function renderAiModeInline() {
   const live = state.aiStatus?.mode === "live";
   const protectedAi = live && state.aiStatus?.accessRequired;
   return `<div class="ai-mode-inline ${live ? "is-live" : "is-demo"} ${protectedAi ? "has-access-control" : ""}" role="status">
-    <div class="ai-mode-summary">${icon(live ? "check" : "shield")}<span><strong>${live ? `在线模型 · ${escapeHtml(state.aiStatus.model)}` : "演示模式"}</strong><small>${live ? "返回内容会先通过字段白名单和结构检查" : "使用确定性规则，不产生 API 费用"}</small></span></div>
+    <div class="ai-mode-summary">${icon(live ? "check" : "shield")}<span><strong>${live ? `在线模型 · ${escapeHtml(state.aiStatus.model)}` : state.aiStatus?.mode === "demo" ? "演示模式" : "AI 连接待确认"}</strong><small>${live ? "返回内容会先通过字段白名单和结构检查" : state.aiStatus?.mode === "demo" ? "使用确定性规则，不产生 API 费用" : "暂未确认服务状态；发起请求失败时会保留原稿并提示"}</small></span></div>
     ${protectedAi ? `<div class="ai-access-control"><label for="ai-access-code">AI 访问码</label><input id="ai-access-code" type="password" data-field="aiAccessCode" value="" placeholder="${aiAccessCodeSet ? "本次会话已解锁" : "输入后解锁真实 AI"}" autocomplete="off" /><button class="button secondary" type="button" data-action="save-ai-access-code" ${!aiAccessCodeDraft.trim() ? "disabled" : ""}>${aiAccessCodeSet ? "更新访问码" : "解锁 AI"}</button>${aiAccessCodeSet ? `<button class="link-button" type="button" data-action="clear-ai-access-code">清除</button>` : ""}</div>` : ""}
   </div>`;
 }
@@ -1778,7 +1778,7 @@ async function analyzeSourceInputWithAi() {
     state.aiBusy = false;
     state.aiTaskMessage = "";
     render();
-    const pendingSources = state.inputAnalysis.sources.filter((source) => source.extractionStatus === "pending");
+    const pendingSources = state.inputAnalysis.sources.filter((source) => source.extractionStatus === "pending" && rawInput.includes(source.url));
     let parsedCount = 0;
     for (const source of pendingSources) {
       state.sourceBusyId = source.id;
@@ -1807,6 +1807,7 @@ async function analyzeSourceInputWithAi() {
     state.aiTaskMessage = "";
     state.inputAnalysisError = error instanceof Error ? error.message : "输入分析失败，请补充关键信息后重试";
     render();
+    showToast(state.inputAnalysisError);
   }
 }
 
@@ -2035,6 +2036,24 @@ app.addEventListener("click", (event) => {
   if (!target) return;
   const { action, id, value, versionId, fieldKey, index, direction } = target.dataset;
 
+  const aiActions = new Set(["analyze-source-input", "start-dynamic-research", "build-dynamic-outline", "rewrite-outline-page", "rewrite-page", "confirm-document-rewrite", "rewrite-publish-body"]);
+  if (aiActions.has(action)) {
+    if (state.aiBusy) { showToast("AI 正在处理当前请求，请等待完成，不必重复点击。"); return; }
+    // Read the visible value too: password autofill does not always emit input.
+    const latestCode = (document.querySelector('[data-field="aiAccessCode"]')?.value || aiAccessCodeDraft).trim();
+    if (latestCode) {
+      setAiAccessCode(latestCode);
+      aiAccessCodeSet = true;
+      aiAccessCodeDraft = "";
+      try { sessionStorage.setItem("chanyou-ai-access-code", latestCode); } catch { /* Memory remains available. */ }
+    }
+    if (state.aiStatus?.accessRequired && !aiAccessCodeSet) {
+      showToast("请先输入 AI 访问码，再点击生成。");
+      document.querySelector('[data-field="aiAccessCode"]')?.focus();
+      return;
+    }
+  }
+
   if (action === "save-ai-access-code") {
     const code = aiAccessCodeDraft.trim();
     if (!code) {
@@ -2047,7 +2066,7 @@ app.addEventListener("click", (event) => {
     aiAccessCodeDraft = "";
     try { sessionStorage.setItem("chanyou-ai-access-code", code); } catch { /* Keep it in memory. */ }
     render();
-    showToast("真实 AI 已为本次浏览会话解锁");
+    showToast("访问码已保存，将在下一次 AI 请求时验证。");
     return;
   }
   if (action === "clear-ai-access-code") {
@@ -2075,6 +2094,7 @@ app.addEventListener("click", (event) => {
     saveState();
     render();
     document.querySelector("#source-input")?.focus();
+    showToast("主题已填入，点击“分析我的输入”生成候选选题。");
   }
   if (action === "clear-screenshot") clearScreenshotCapture();
   if (action === "confirm-screenshot") void confirmScreenshotCapture();
