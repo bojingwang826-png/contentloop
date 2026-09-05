@@ -68,6 +68,7 @@ import { clearAiAccessCode, getAiRuntimeStatus, researchGameTopic, runAiTask, se
 import { extractPublicSource } from "./services/source-client.js";
 import { createLowResolutionPreview, recognizeScreenshot } from "./services/screenshot-ocr-client.js";
 import { removeConfirmedScreenshot, isScreenshotReviewReady, usableScreenshotText } from "./domain/ocr-layout.js";
+import { connectObsidianVault, disconnectObsidianVault, getObsidianStatus, restoreObsidianConnection, scheduleObsidianSync, subscribeObsidianStatus } from "./services/obsidian-sync.js";
 
 const project = parseProject(sampleProject);
 const storageKey = "game-note-studio-phase-a-v2";
@@ -145,6 +146,7 @@ const defaultState = {
 };
 
 let state = loadState();
+let obsidianStatus = getObsidianStatus();
 let aiAccessCodeDraft = "";
 let aiAccessCodeSet = false;
 try {
@@ -292,6 +294,18 @@ function saveState() {
     ...persisted
   } = state;
   localStorage.setItem(storageKey, JSON.stringify(persisted));
+  scheduleObsidianSync(obsidianSyncSnapshot(persisted));
+}
+
+function obsidianSyncSnapshot(persisted = state) {
+  return {
+    route: currentRoute(), accountName: persisted.accountName, sourceInput: persisted.sourceInput,
+    confirmedScreenshots: (persisted.confirmedScreenshots || []).map(({ id, title, text, category, confirmedAt, provider }) => ({ id, title, text, category, confirmedAt, provider })),
+    contentSource: persisted.contentSource, selectedTopicId: persisted.selectedTopicId, customProject: persisted.customProject,
+    outlineConfirmed: persisted.outlineConfirmed, pages: persisted.pages, currentPageId: persisted.currentPageId,
+    publishBody: persisted.publishBody, publishBodyPreserved: persisted.publishBodyPreserved,
+    history: { saved: (persisted.history?.saved || []).map(({ id, label, createdAt, route }) => ({ id, label, createdAt, route })) },
+  };
 }
 
 function escapeHtml(value) {
@@ -355,7 +369,7 @@ function shell(route, content) {
         <div class="topbar-meta">
           <span class="demo-badge">匿名样例</span>
           ${renderAiStatusBadge()}
-          <span class="kb-state">${icon("database")}知识库稍后接入</span>
+          <button class="kb-state kb-connect is-${escapeHtml(obsidianStatus.mode)}" type="button" data-action="connect-obsidian" title="${escapeHtml(obsidianStatus.message)}">${icon("database")}<span>${escapeHtml(["connected", "syncing"].includes(obsidianStatus.mode) ? "Obsidian 已连接" : obsidianStatus.mode === "permission" ? "重新授权 Obsidian" : "连接 Obsidian")}</span></button>
         </div>
       </header>
       <nav class="step-nav" aria-label="创作步骤">
@@ -1382,8 +1396,8 @@ function renderExport() {
       </aside>
     </section>
     <section class="panel knowledge-writeback">
-      <div>${icon("book")}<span><strong>准备写回知识库</strong><small>选题、最终文案、来源关系和修改偏好将分区保存；临时草稿不污染正式事实库。</small></span></div>
-      <span class="status-pill neutral">Phase F 接入</span>
+      <div>${icon("book")}<span><strong>${["connected", "syncing"].includes(obsidianStatus.mode) ? "当前草稿自动写入 Obsidian" : "连接 Obsidian 知识库"}</strong><small>${["connected", "syncing"].includes(obsidianStatus.mode) ? `${escapeHtml(obsidianStatus.message)}；内容保存在 AI待确认，不覆盖正式事实。` : "首次选择本地 Vault 并授权；后续草稿改动会在当前浏览器自动写回。"}</small></span></div>
+      <button class="button secondary" type="button" data-action="connect-obsidian">${icon("database")}${["connected", "syncing"].includes(obsidianStatus.mode) ? "管理连接" : "选择 Vault"}</button>
     </section>
     <div class="bottom-action"><div><strong>${escapeHtml(selectedTitle)}</strong><span>当前推荐标题 · 收藏价值型</span></div><a class="button ghost link-button" href="#/editor">返回编辑</a></div>
   `);
@@ -1402,6 +1416,20 @@ function render() {
     editorPreviewRequest += 1;
   }
 }
+
+subscribeObsidianStatus((next) => {
+  obsidianStatus = next;
+  const button = document.querySelector('[data-action="connect-obsidian"]');
+  if (!button) return;
+  button.className = `kb-state kb-connect is-${next.mode}`;
+  button.title = next.message;
+  const label = button.querySelector("span:last-child");
+  if (label) label.textContent = ["connected", "syncing"].includes(next.mode) ? "Obsidian 已连接" : next.mode === "permission" ? "重新授权 Obsidian" : "连接 Obsidian";
+});
+
+void restoreObsidianConnection().then(() => {
+  if (getObsidianStatus().mode === "connected") scheduleObsidianSync(obsidianSyncSnapshot());
+});
 
 function navigate(route) {
   location.hash = `#/${route}`;
@@ -2077,6 +2105,15 @@ app.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action]");
   if (!target) return;
   const { action, id, value, versionId, fieldKey, index, direction } = target.dataset;
+  if (action === "connect-obsidian") {
+    if (["connected", "syncing"].includes(obsidianStatus.mode)) {
+      if (!window.confirm("断开这个浏览器与 Obsidian 的连接？知识库中的已有笔记不会被删除。")) return;
+      void disconnectObsidianVault().then(() => showToast("已断开 Obsidian；已有笔记保持不变"));
+      return;
+    }
+    void connectObsidianVault(obsidianSyncSnapshot()).then(() => showToast("Obsidian 已连接，当前草稿开始自动同步")).catch((error) => showToast(error?.name === "AbortError" ? "没有选择文件夹" : error.message || "Obsidian 连接失败"));
+    return;
+  }
   if (action === "delete-confirmed-screenshot") { deleteConfirmedScreenshot(id); return; }
 
   const aiActions = new Set(["analyze-source-input", "start-dynamic-research", "build-dynamic-outline", "rewrite-outline-page", "rewrite-page", "confirm-document-rewrite", "rewrite-publish-body"]);

@@ -492,6 +492,29 @@ a {
   gap: 7px;
 }
 
+.kb-connect {
+  min-height: 44px;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.kb-connect.is-connected,
+.kb-connect.is-syncing {
+  color: var(--success-strong);
+  border-color: rgb(89 211 155 / 45%);
+}
+
+.kb-connect.is-error,
+.kb-connect.is-permission {
+  color: var(--warning-strong);
+}
+
+.kb-connect:focus-visible {
+  outline: 3px solid rgb(247 199 91 / 45%);
+  outline-offset: 2px;
+}
+
 .ai-runtime-badge {
   display: inline-flex;
   align-items: center;
