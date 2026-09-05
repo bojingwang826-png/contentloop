@@ -70,10 +70,10 @@ export function obsidianSnapshotMarkdown(snapshot, syncedAt = new Date().toISOSt
 type: chanyou-site-snapshot
 status: ai-pending
 synced_at: ${syncedAt}
-source: 铲友创作台
+source: ContentLoop｜游戏内容 AI 增长工作台
 ---
 
-# 铲友创作台自动同步草稿
+# ContentLoop 自动同步草稿
 
 > [!warning] AI 待确认
 > 这是网站当前草稿的自动快照，不代表游戏事实已核验，也不会覆盖正式知识笔记。
@@ -129,7 +129,7 @@ async function writeFile(folder, name, content) {
 async function appendLog(folder, line) {
   const handle = await folder.getFileHandle("同步记录.md", { create: true });
   const old = await (await handle.getFile()).text();
-  const header = old || "# 铲友创作台同步记录\n\n此日志只记录自动快照时间与步骤；完整内容见当前草稿。\n\n";
+  const header = old || "# ContentLoop 同步记录\n\n此日志只记录自动快照时间与步骤；完整内容见当前草稿。\n\n";
   await writeFile(folder, "同步记录.md", `${header}${line}\n`);
 }
 

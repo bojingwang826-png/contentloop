@@ -362,9 +362,9 @@ function shell(route, content) {
   return `
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand" href="#/home" aria-label="返回铲友创作台首页">
+        <a class="brand" href="#/home" aria-label="返回 ContentLoop｜游戏内容 AI 增长工作台首页">
           <span class="brand-mark" aria-hidden="true"></span>
-          <span><strong>铲友创作台</strong><small>游戏图文知识库与创作工作台</small></span>
+          <span><strong>ContentLoop</strong><small>游戏内容 AI 增长工作台</small></span>
         </a>
         <div class="topbar-meta">
           <span class="demo-badge">匿名样例</span>
@@ -1407,7 +1407,7 @@ function render() {
   const route = currentRoute();
   const renderers = { home: renderHome, research: renderResearch, outline: renderOutline, editor: renderEditor, export: renderExport };
   app.innerHTML = renderers[route]();
-  document.title = `${steps.find((step) => step.id === route)?.label || "首页"} · 铲友创作台`;
+  document.title = `${steps.find((step) => step.id === route)?.label || "首页"} · ContentLoop｜游戏内容 AI 增长工作台`;
   if (route === "editor") {
     const current = state.pages.find((page) => page.id === state.currentPageId) || state.pages[0];
     scheduleEditorFinalPreview(current);

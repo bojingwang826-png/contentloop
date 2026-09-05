@@ -144,5 +144,5 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
-  process.stdout.write(`铲友创作台已启动：http://127.0.0.1:${port}\n`);
+  process.stdout.write(`ContentLoop 已启动：http://127.0.0.1:${port}\n`);
 });

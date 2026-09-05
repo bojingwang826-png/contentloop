@@ -1,5 +1,5 @@
 ---
-name: 铲友创作台设计系统
+name: ContentLoop 设计系统
 version: 0.1
 stage: Phase A
 ---
