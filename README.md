@@ -6,6 +6,8 @@ ContentLoop 是一套面向游戏内容运营与图文创作者的 AI 创作工�
 
 [在线体验](https://contentloop.bojingwang826.chatgpt.site) · [GitHub 仓库](https://github.com/bojingwang826-png/contentloop) · [面试演示脚本](docs/面试演示包-v30.md)
 
+[![CI](https://github.com/bojingwang826-png/contentloop/actions/workflows/ci.yml/badge.svg)](https://github.com/bojingwang826-png/contentloop/actions/workflows/ci.yml)
+
 > 在线 AI 和视觉识别功能可能需要访问码。访问码与模型密钥均不写入公开仓库，请向项目所有者单独获取。
 
 ## 产品预览
@@ -243,4 +245,6 @@ npm run build
 
 ## 素材与许可说明
 
-项目中的部分游戏头像与图标来自 Riot Games 的公开静态资源，仅用于产品原型和内容工作流演示；相关游戏名称和素材权利归原权利人所有。仓库目前未附开源许可证，公开可见不等于允许复制、修改或再分发。
+项目中的部分游戏头像与图标来自 Riot Games 的公开静态资源，仅用于产品原型和内容工作流演示；相关游戏名称和素材权利归原权利人所有。
+
+本仓库采用作品集展示授权，而非开源许可证。公开可见仅用于作品审阅、技术评估和学习检查；未经书面许可，不得复制、修改、部署、分发或商用项目中的原创代码、文档和设计。完整条款见 [LICENSE](LICENSE)。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要在公开 Issue 中提交密钥、访问码或敏感日志。
