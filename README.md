@@ -20,7 +20,7 @@ ContentLoop 是一套面向游戏内容运营与图文创作者的 AI 创作工�
 
 ### 实际生成的图文页面
 
-![ContentLoop 生成的 3:4 英雄介绍页面，标题、正文与四张英雄卡片完整展示](docs/screenshots/contentloop-page-example.png)
+![ContentLoop 生成的 3:4 装备方案页面，三张卡片使用统一字号并完整展示正文](docs/screenshots/contentloop-page-example.png)
 
 ## 为什么做 ContentLoop
 
