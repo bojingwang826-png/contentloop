@@ -6,6 +6,8 @@ ContentLoop 是一套面向游戏内容运营与图文创作者的 AI 创作工�
 
 [在线体验](https://contentloop.bojingwang826.chatgpt.site) · [GitHub 仓库](https://github.com/bojingwang826-png/contentloop) · [面试演示脚本](docs/面试演示包-v30.md)
 
+在线体验会先进入简洁的产品理解页。首次访问者可以直接开始创作，也可以跳过 AI 配置，打开内置匿名七页样例查看完整效果。
+
 [![CI](https://github.com/bojingwang826-png/contentloop/actions/workflows/ci.yml/badge.svg)](https://github.com/bojingwang826-png/contentloop/actions/workflows/ci.yml)
 
 > 在线 AI 和视觉识别功能可能需要访问码。访问码与模型密钥均不写入公开仓库，请向项目所有者单独获取。

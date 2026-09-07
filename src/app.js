@@ -341,6 +341,10 @@ function icon(name, label = "") {
     eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
     shield: '<path d="M12 3 4 6v5c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/>',
     warning: '<path d="M12 3 2.5 20h19Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    spark: '<path d="m12 3 1.35 4.15a5.7 5.7 0 0 0 3.5 3.5L21 12l-4.15 1.35a5.7 5.7 0 0 0-3.5 3.5L12 21l-1.35-4.15a5.7 5.7 0 0 0-3.5-3.5L3 12l4.15-1.35a5.7 5.7 0 0 0 3.5-3.5Z"/>',
+    play: '<path d="m8 5 11 7-11 7Z"/>',
+    image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/>',
+    layout: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M9 10h12"/>',
   };
   return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.check}</svg>${label ? `<span>${escapeHtml(label)}</span>` : ""}`;
 }
@@ -355,6 +359,65 @@ const steps = [
 
 function currentRoute() {
   return normalizeRoute(location.hash);
+}
+
+function isWelcomeRoute() {
+  return !location.hash || String(location.hash).replace(/^#\/?/, "").split("?")[0] === "welcome";
+}
+
+function renderWelcome() {
+  const workflow = [
+    ["01", "输入素材", "灵感 · 网页 · 截图"],
+    ["02", "AI 选题", "找到值得写的方向"],
+    ["03", "研究观点", "整理证据与判断"],
+    ["04", "七页大纲", "确认每页内容任务"],
+    ["05", "图文导出", "生成可编辑成品"],
+  ];
+  const features = [
+    ["spark", "真实 AI 改写", "根据输入素材与上下文生成和改写，不是固定模板拼接。"],
+    ["image", "截图识别", "直接输入游戏截图，识别图中文字与结构并转化为创作素材。"],
+    ["layout", "自适应图文排版", "根据七页内容结构自动选择布局，并保证文字完整可读。"],
+  ];
+  return `
+    <div class="welcome-shell">
+      <header class="welcome-nav" aria-label="产品进入页导航">
+        <a class="brand" href="#/welcome" aria-label="ContentLoop 产品进入页">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span><strong>ContentLoop</strong><small>游戏内容 AI 增长工作台</small></span>
+        </a>
+        <a class="welcome-workspace-link" href="#/home">进入工作台 ${icon("arrow")}</a>
+      </header>
+      <main id="main-content" class="welcome-main" tabindex="-1">
+        <section class="welcome-hero" aria-labelledby="welcome-title">
+          <div class="welcome-badge">${icon("spark")}<span>AI 游戏内容创作工作流</span></div>
+          <h1 id="welcome-title">把灵感，<br>变成一套<span>完整的游戏图文内容。</span></h1>
+          <p>把灵感、网页或截图，<br>转化为可编辑的七页游戏图文内容。</p>
+          <div class="welcome-actions" aria-label="体验方式">
+            <a class="button primary welcome-primary" href="#/home">${icon("spark")}开始创作 ${icon("arrow")}</a>
+            <a class="button secondary welcome-secondary" href="#/editor">${icon("play")}查看完整演示</a>
+          </div>
+          <small class="welcome-helper"><span class="welcome-status-dot" aria-hidden="true"></span>在线 AI 需要访问码 · 无访问码也可以直接浏览完整演示</small>
+        </section>
+
+        <section class="welcome-workflow" aria-labelledby="workflow-title">
+          <div class="welcome-section-heading"><span>从输入到成品</span><h2 id="workflow-title">五步完成一套内容</h2></div>
+          <ol>
+            ${workflow.map(([number, title, hint], index) => `<li style="--step-delay:${index * 90}ms"><span>${number}</span><div><strong>${title}</strong><small>${hint}</small></div></li>`).join("")}
+          </ol>
+        </section>
+
+        <section class="welcome-features" aria-labelledby="features-title">
+          <h2 id="features-title" class="sr-only">核心能力</h2>
+          ${features.map(([iconName, title, copy]) => `<article><span>${icon(iconName)}</span><div><h3>${title}</h3><p>${copy}</p></div></article>`).join("")}
+        </section>
+
+        <section class="welcome-footer-cta" aria-label="开始使用 ContentLoop">
+          <div><span>准备好开始了吗？</span><strong>从一个灵感开始。</strong></div>
+          <a class="button primary" href="#/home">开始创作 ${icon("arrow")}</a>
+        </section>
+      </main>
+    </div>
+  `;
 }
 
 function shell(route, content) {
@@ -1404,6 +1467,13 @@ function renderExport() {
 }
 
 function render() {
+  if (isWelcomeRoute()) {
+    app.innerHTML = renderWelcome();
+    document.title = "ContentLoop｜游戏内容 AI 增长工作台";
+    window.clearTimeout(editorPreviewTimer);
+    editorPreviewRequest += 1;
+    return;
+  }
   const route = currentRoute();
   const renderers = { home: renderHome, research: renderResearch, outline: renderOutline, editor: renderEditor, export: renderExport };
   app.innerHTML = renderers[route]();
@@ -2947,6 +3017,6 @@ window.addEventListener("hashchange", () => {
   requestAnimationFrame(() => document.querySelector("#main-content")?.focus({ preventScroll: true }));
 });
 
-if (!location.hash) location.hash = "#/home";
+if (!location.hash) location.hash = "#/welcome";
 render();
 void refreshAiRuntimeStatus();
