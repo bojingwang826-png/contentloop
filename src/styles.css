@@ -453,12 +453,12 @@ a {
 
 .welcome-hero {
   position: relative;
-  min-height: 472px;
+  max-width: 930px;
   padding-bottom: 48px;
 }
 
 .welcome-hero-copy {
-  width: min(930px, calc(100% - 300px));
+  width: 100%;
 }
 
 .welcome-hero::after {
@@ -511,73 +511,6 @@ a {
   color: var(--text-secondary);
   font-size: clamp(17px, 1.7vw, 21px);
   line-height: 1.65;
-}
-
-.welcome-output-preview {
-  position: absolute;
-  right: 10px;
-  top: 64px;
-  display: grid;
-  width: 244px;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-
-.welcome-output-label {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.welcome-output-label small {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.welcome-output-stack {
-  position: relative;
-  display: block;
-  height: 326px;
-}
-
-.welcome-output-page {
-  position: absolute;
-  display: block;
-  width: 196px;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  border: 1px solid var(--border);
-  border-radius: 13px;
-  box-shadow: var(--shadow-lg);
-  transition: transform 220ms ease, border-color 220ms ease;
-}
-
-.welcome-output-page-back {
-  left: 0;
-  top: 22px;
-  transform: rotate(-5deg);
-  opacity: .72;
-}
-
-.welcome-output-page-front {
-  right: 0;
-  top: 0;
-  transform: rotate(3deg);
-}
-
-.welcome-output-preview:hover .welcome-output-page-back {
-  transform: translateX(-5px) rotate(-7deg);
-  border-color: var(--accent);
-}
-
-.welcome-output-preview:hover .welcome-output-page-front {
-  transform: translateX(4px) rotate(4deg);
-  border-color: var(--accent);
 }
 
 .welcome-actions {
@@ -781,18 +714,6 @@ a {
 }
 
 @media (max-width: 980px) {
-  .welcome-hero {
-    min-height: 0;
-  }
-
-  .welcome-hero-copy {
-    width: 100%;
-  }
-
-  .welcome-output-preview {
-    display: none;
-  }
-
   .welcome-workflow {
     grid-template-columns: 1fr;
   }
@@ -908,10 +829,6 @@ a {
   }
 
   .welcome-workspace-link .icon {
-    transition: none;
-  }
-
-  .welcome-output-page {
     transition: none;
   }
 }

@@ -59,8 +59,6 @@ import {
 } from "./domain/source-cards.js";
 import { refreshAnalysisWithParsedSources } from "./domain/input-analysis.js";
 
-const welcomePageExampleUrl = new URL("../docs/screenshots/contentloop-page-example.png", import.meta.url).href;
-const welcomeOutputUrl = new URL("../docs/screenshots/contentloop-output.png", import.meta.url).href;
 import {
   createConfirmedScreenshotRecord,
   deriveScreenshotResult,
@@ -402,13 +400,6 @@ function renderWelcome() {
             </div>
             <small class="welcome-helper"><span class="welcome-status-dot" aria-hidden="true"></span>在线 AI 需要访问码 · 无访问码也可以直接浏览完整演示</small>
           </div>
-          <a class="welcome-output-preview" href="#/editor" aria-label="查看真实七页图文成品">
-            <span class="welcome-output-label">真实七页成品<small>可逐页编辑</small></span>
-            <span class="welcome-output-stack" aria-hidden="true">
-              <img class="welcome-output-page welcome-output-page-back" src="${welcomePageExampleUrl}" alt="" width="1080" height="1440" loading="lazy" decoding="async">
-              <img class="welcome-output-page welcome-output-page-front" src="${welcomeOutputUrl}" alt="" width="1080" height="1440" loading="lazy" decoding="async">
-            </span>
-          </a>
         </section>
 
         <section class="welcome-workflow" aria-labelledby="workflow-title">
