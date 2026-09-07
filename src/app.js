@@ -58,6 +58,9 @@ import {
   updateSourceCard,
 } from "./domain/source-cards.js";
 import { refreshAnalysisWithParsedSources } from "./domain/input-analysis.js";
+
+const welcomePageExampleUrl = new URL("../docs/screenshots/contentloop-page-example.png", import.meta.url).href;
+const welcomeOutputUrl = new URL("../docs/screenshots/contentloop-output.png", import.meta.url).href;
 import {
   createConfirmedScreenshotRecord,
   deriveScreenshotResult,
@@ -389,14 +392,23 @@ function renderWelcome() {
       </header>
       <main id="main-content" class="welcome-main" tabindex="-1">
         <section class="welcome-hero" aria-labelledby="welcome-title">
-          <div class="welcome-badge">${icon("spark")}<span>AI 游戏内容创作工作流</span></div>
-          <h1 id="welcome-title">把灵感，<br>变成一套<span>完整的游戏图文内容。</span></h1>
-          <p>把灵感、网页或截图，<br>转化为可编辑的七页游戏图文内容。</p>
-          <div class="welcome-actions" aria-label="体验方式">
-            <a class="button primary welcome-primary" href="#/home">${icon("spark")}开始创作 ${icon("arrow")}</a>
-            <a class="button secondary welcome-secondary" href="#/editor">${icon("play")}查看完整演示</a>
+          <div class="welcome-hero-copy">
+            <div class="welcome-badge">${icon("spark")}<span>AI 游戏内容创作工作流</span></div>
+            <h1 id="welcome-title">把灵感，<br>变成一套<span>完整的游戏图文内容。</span></h1>
+            <p>把灵感、网页或截图，<br>转化为可编辑的七页游戏图文内容。</p>
+            <div class="welcome-actions" aria-label="体验方式">
+              <a class="button primary welcome-primary" href="#/home">${icon("spark")}开始创作 ${icon("arrow")}</a>
+              <a class="button secondary welcome-secondary" href="#/editor">${icon("play")}查看完整演示</a>
+            </div>
+            <small class="welcome-helper"><span class="welcome-status-dot" aria-hidden="true"></span>在线 AI 需要访问码 · 无访问码也可以直接浏览完整演示</small>
           </div>
-          <small class="welcome-helper"><span class="welcome-status-dot" aria-hidden="true"></span>在线 AI 需要访问码 · 无访问码也可以直接浏览完整演示</small>
+          <a class="welcome-output-preview" href="#/editor" aria-label="查看真实七页图文成品">
+            <span class="welcome-output-label">真实七页成品<small>可逐页编辑</small></span>
+            <span class="welcome-output-stack" aria-hidden="true">
+              <img class="welcome-output-page welcome-output-page-back" src="${welcomePageExampleUrl}" alt="" width="1080" height="1440" loading="lazy" decoding="async">
+              <img class="welcome-output-page welcome-output-page-front" src="${welcomeOutputUrl}" alt="" width="1080" height="1440" loading="lazy" decoding="async">
+            </span>
+          </a>
         </section>
 
         <section class="welcome-workflow" aria-labelledby="workflow-title">
