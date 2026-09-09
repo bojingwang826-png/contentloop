@@ -143,6 +143,6 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
+server.listen(port, "0.0.0.0", () => {
   process.stdout.write(`ContentLoop 已启动：http://127.0.0.1:${port}\n`);
 });

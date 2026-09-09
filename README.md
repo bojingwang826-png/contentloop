@@ -4,7 +4,7 @@ ContentLoop 是一套面向游戏内容运营与图文创作者的 AI 创作工�
 
 当前首个完整场景是《金铲铲之战》内容创作。项目重点不是“一键生成一篇套话”，而是让用户在事实边界清楚、人工修改受保护的前提下，与 AI 共同完成整条内容生产流程。
 
-[在线体验](https://contentloop.bojingwang826.chatgpt.site) · [GitHub 仓库](https://github.com/bojingwang826-png/contentloop) · [面试演示脚本](docs/面试演示包-v30.md)
+[在线体验](https://contentloop.pocketbay.app/) · [GitHub 仓库](https://github.com/bojingwang826-png/contentloop) · [面试演示脚本](docs/面试演示包-v30.md)
 
 在线体验会先进入简洁的产品理解页。首次访问者可以直接开始创作，也可以跳过 AI 配置，打开内置匿名七页样例查看完整效果。
 
