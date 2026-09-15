@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "ContentLoop 小红书本机发布助手",
+  "version": "0.2.4",
+  "description": "把 ContentLoop 的七页图片与文案填入小红书图文草稿，由用户修改并确认发布。",
+  "permissions": ["scripting"],
+  "host_permissions": [
+    "https://contentloop.pocketbay.app/*",
+    "https://contentloop--e.pocketbay.app/*",
+    "https://creator.xiaohongshu.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://contentloop--e.pocketbay.app/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["contentloop-page.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
